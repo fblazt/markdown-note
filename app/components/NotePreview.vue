@@ -29,6 +29,8 @@
           <Code v-else :size="14" />
           <span>{{ copiedHtml ? 'Copied HTML' : 'Copy HTML' }}</span>
         </button>
+
+        <ExportDropdown :note="activeNote" />
       </div>
     </div>
 
@@ -66,6 +68,7 @@ import { ref, computed } from 'vue';
 import { Eye, Copy, Check, Code } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
 import { parseMarkdown, getWordCount, getCharCount, getReadingTime } from '../utils/markdown';
+import ExportDropdown from './ExportDropdown.vue';
 
 const { activeNote } = useNotes();
 

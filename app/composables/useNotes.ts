@@ -183,7 +183,7 @@ export function useNotes() {
     }
 
     try {
-      await $fetch(`/api/notes/${id}`, {
+      await $fetch<{ success: boolean; id: string }>(`/api/notes/${id}`, {
         method: 'DELETE',
       });
 

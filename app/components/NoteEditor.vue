@@ -11,19 +11,23 @@
           @input="handleTitleInput"
         />
 
-        <div class="save-status-indicator">
-          <span v-if="saveStatus === 'saving'" class="status-badge saving">
-            <Loader2 class="icon-spin" :size="13" /> Saving...
-          </span>
-          <span v-else-if="saveStatus === 'saved'" class="status-badge saved">
-            <Check :size="13" /> Saved
-          </span>
-          <span v-else-if="saveStatus === 'unsaved'" class="status-badge unsaved">
-            <Clock :size="13" /> Unsaved
-          </span>
-          <span v-else-if="saveStatus === 'error'" class="status-badge error">
-            <AlertCircle :size="13" /> Error saving
-          </span>
+        <div class="editor-header-actions">
+          <div class="save-status-indicator">
+            <span v-if="saveStatus === 'saving'" class="status-badge saving">
+              <Loader2 class="icon-spin" :size="13" /> Saving...
+            </span>
+            <span v-else-if="saveStatus === 'saved'" class="status-badge saved">
+              <Check :size="13" /> Saved
+            </span>
+            <span v-else-if="saveStatus === 'unsaved'" class="status-badge unsaved">
+              <Clock :size="13" /> Unsaved
+            </span>
+            <span v-else-if="saveStatus === 'error'" class="status-badge error">
+              <AlertCircle :size="13" /> Error saving
+            </span>
+          </div>
+
+          <ExportDropdown :note="activeNote" />
         </div>
       </div>
 
@@ -221,6 +225,7 @@ import {
   X,
 } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
+import ExportDropdown from './ExportDropdown.vue';
 
 const { activeNote, saveStatus, queueAutoSave, flushAutoSave } = useNotes();
 
@@ -416,6 +421,13 @@ function insertFormat(type: string) {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .title-input {

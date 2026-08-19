@@ -8,10 +8,68 @@
         <span class="notes-count-badge">{{ notes.length }}</span>
       </div>
 
-      <button class="btn btn-primary btn-new-note" @click="handleCreateNote" title="Create New Note (Ctrl+N)">
-        <Plus :size="16" />
-        <span>New Note</span>
-      </button>
+      <div class="sidebar-header-actions">
+        <!-- Export All Dropdown -->
+        <div ref="exportMenuRef" class="export-all-wrapper">
+          <button
+            type="button"
+            class="btn-icon btn-export-all"
+            :class="{ active: isExportOpen }"
+            title="Export all notes"
+            aria-label="Export all notes"
+            aria-haspopup="true"
+            :aria-expanded="isExportOpen"
+            @click="toggleExportMenu"
+          >
+            <Download :size="15" />
+          </button>
+
+          <transition name="dropdown-fade">
+            <div
+              v-if="isExportOpen"
+              class="export-all-menu"
+              role="menu"
+              aria-orientation="vertical"
+              @keydown.escape="isExportOpen = false"
+            >
+              <div class="menu-header">
+                <span>Export All ({{ notes.length }})</span>
+              </div>
+
+              <button
+                type="button"
+                class="menu-item"
+                role="menuitem"
+                @click="handleExportAll('json')"
+              >
+                <Braces :size="15" class="item-icon-json" />
+                <div class="item-content">
+                  <span class="item-title">JSON Backup</span>
+                  <span class="item-subtitle">Full backup (.json)</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="menu-item"
+                role="menuitem"
+                @click="handleExportAll('md')"
+              >
+                <FileText :size="15" class="item-icon-md" />
+                <div class="item-content">
+                  <span class="item-title">Markdown Digest</span>
+                  <span class="item-subtitle">Combined doc with TOC (.md)</span>
+                </div>
+              </button>
+            </div>
+          </transition>
+        </div>
+
+        <button class="btn btn-primary btn-new-note" @click="handleCreateNote" title="Create New Note (Ctrl+N)">
+          <Plus :size="16" />
+          <span>New Note</span>
+        </button>
+      </div>
     </div>
 
     <!-- Search & Filter Area -->
@@ -120,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
 import {
   FileText,
   Plus,
@@ -127,8 +186,11 @@ import {
   X,
   Trash2,
   Calendar,
+  Download,
+  Braces,
 } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
+import { exportNoteJson, exportCombinedMarkdown, downloadBlob } from '../utils/export';
 
 const {
   notes,
@@ -143,7 +205,55 @@ const {
   createNote,
   deleteNote,
   toggleTagFilter,
+  flushAutoSave,
 } = useNotes();
+
+const isExportOpen = ref(false);
+const exportMenuRef = ref<HTMLElement | null>(null);
+
+function toggleExportMenu(e: MouseEvent) {
+  e.stopPropagation();
+  isExportOpen.value = !isExportOpen.value;
+}
+
+function handleExportAll(type: 'json' | 'md') {
+  flushAutoSave();
+  isExportOpen.value = false;
+
+  if (type === 'json') {
+    const content = exportNoteJson(notes.value);
+    downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+  } else if (type === 'md') {
+    const content = exportCombinedMarkdown(notes.value);
+    downloadBlob(content, 'notes-digest.md', 'text/markdown;charset=utf-8');
+  }
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (exportMenuRef.value && !exportMenuRef.value.contains(event.target as Node)) {
+    isExportOpen.value = false;
+  }
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isExportOpen.value) {
+    isExportOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('keydown', handleKeydown);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('click', handleClickOutside);
+    document.removeEventListener('keydown', handleKeydown);
+  }
+});
 
 async function handleCreateNote() {
   await createNote({
@@ -240,6 +350,116 @@ function formatDate(isoString: string): string {
   border-radius: var(--radius-full);
   font-weight: 600;
   border: 1px solid var(--border-subtle);
+}
+
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.export-all-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.btn-export-all {
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  padding: 0.35rem;
+}
+
+.btn-export-all:hover,
+.btn-export-all.active {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.export-all-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 220px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.35rem;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.menu-header {
+  padding: 0.4rem 0.6rem 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.menu-item:hover,
+.menu-item:focus {
+  background-color: var(--bg-surface-hover);
+  outline: none;
+}
+
+.item-icon-json {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.item-icon-md {
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.item-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.item-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.item-subtitle {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .btn-new-note {
