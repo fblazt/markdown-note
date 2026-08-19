@@ -70,6 +70,7 @@
       </div>
 
       <div class="header-right">
+        <ThemeToggle />
         <button class="btn btn-primary btn-header-new" @click="handleCreateNote" title="New Note (Ctrl+N)">
           <Plus :size="15" />
           <span class="new-note-label">New Note</span>
@@ -124,14 +125,15 @@ import {
   ChevronLeft,
 } from 'lucide-vue-next';
 import { useNotes } from './composables/useNotes';
+import { useTheme } from './composables/useTheme';
 import NoteSidebar from './components/NoteSidebar.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import NotePreview from './components/NotePreview.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
 
 const {
   notes,
   activeNote,
-  viewMode,
   effectiveViewMode,
   isSidebarOpen,
   isMobile,
@@ -142,6 +144,8 @@ const {
   navigateBackToList,
   checkMobile,
 } = useNotes();
+
+const { initTheme } = useTheme();
 
 async function handleCreateNote() {
   await createNote({
@@ -160,6 +164,7 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  initTheme();
   checkMobile();
   await fetchNotes();
   window.addEventListener('keydown', handleGlobalKeydown);
@@ -185,15 +190,16 @@ onUnmounted(() => {
   color: var(--accent-primary);
   font-weight: 600;
   font-size: 0.875rem;
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--bg-surface);
   border-radius: var(--radius-md);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  border: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .mobile-back-btn:hover {
-  background: rgba(99, 102, 241, 0.2);
+  background: var(--bg-surface-hover);
+  border-color: var(--border-focus);
 }
 
 .mobile-back-text {
@@ -214,7 +220,7 @@ onUnmounted(() => {
 .brand-name {
   font-size: 1rem;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 
@@ -258,14 +264,14 @@ onUnmounted(() => {
 
 .view-mode-btn.active {
   background-color: var(--bg-app);
-  color: #ffffff;
+  color: var(--text-primary);
   box-shadow: var(--shadow-sm);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .status-left,

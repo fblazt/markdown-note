@@ -95,7 +95,7 @@ export function exportNoteMarkdown(
 /**
  * Exports a note as an HTML string.
  * Standalone option wraps the content in a valid, responsive HTML5 document
- * complete with dark/light mode styles, meta tags, and print stylesheets.
+ * complete with Kanagawa Dragon (dark) / Kanagawa Lotus (light) styles, meta tags, and print stylesheets.
  */
 export function exportNoteHtml(
   note: Note,
@@ -120,24 +120,27 @@ export function exportNoteHtml(
   <title>${title}</title>
   <style>
     :root {
-      --bg-primary: #0f172a;
-      --bg-surface: #1e293b;
-      --text-primary: #f8fafc;
-      --text-secondary: #94a3b8;
-      --text-muted: #64748b;
-      --accent-primary: #6366f1;
-      --border-color: #334155;
+      /* Kanagawa Dragon (Dark) */
+      --bg-primary: #181616;
+      --bg-surface: #1d1c19;
+      --text-primary: #c5c9c5;
+      --text-secondary: #8a9a86;
+      --text-muted: #625e5a;
+      --accent-primary: #8ba4b0;
+      --border-color: #282727;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
     @media (prefers-color-scheme: light) {
       :root {
-        --bg-primary: #ffffff;
-        --bg-surface: #f8fafc;
-        --text-primary: #0f172a;
-        --text-secondary: #475569;
-        --text-muted: #94a3b8;
-        --border-color: #e2e8f0;
+        /* Kanagawa Lotus (Light) */
+        --bg-primary: #f2ecbc;
+        --bg-surface: #e7d7ad;
+        --text-primary: #43436c;
+        --text-secondary: #716e61;
+        --text-muted: #8a8980;
+        --accent-primary: #4d699b;
+        --border-color: #dcd5ac;
       }
     }
     *, *::before, *::after {
@@ -186,8 +189,9 @@ export function exportNoteHtml(
       gap: 0.4rem;
     }
     .note-tag {
-      background: rgba(99, 102, 241, 0.15);
+      background: var(--bg-surface);
       color: var(--accent-primary);
+      border: 1px solid var(--border-color);
       padding: 0.15rem 0.55rem;
       border-radius: 9999px;
       font-size: 0.75rem;

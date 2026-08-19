@@ -297,23 +297,23 @@ onUnmounted(() => {
 }
 
 .item-icon-md {
-  color: #818cf8;
+  color: var(--accent-primary);
 }
 
 .item-icon-html {
-  color: #38bdf8;
+  color: var(--accent-secondary);
 }
 
 .item-icon-txt {
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .item-icon-json {
-  color: #fbbf24;
+  color: var(--accent-warning);
 }
 
 .item-icon-print {
-  color: #34d399;
+  color: var(--accent-success);
 }
 
 .item-content {

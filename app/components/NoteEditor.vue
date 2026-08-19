@@ -485,17 +485,18 @@ function insertFormat(type: string) {
 .btn-remove-tag {
   background: transparent;
   border: none;
-  color: #c7d2fe;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0.1rem;
   border-radius: 50%;
+  transition: all 0.15s ease;
 }
 
 .btn-remove-tag:hover {
-  background-color: rgba(239, 68, 68, 0.2);
+  background-color: rgba(196, 116, 110, 0.2);
   color: var(--accent-danger);
 }
 
@@ -573,7 +574,7 @@ function insertFormat(type: string) {
   font-family: var(--font-mono);
   font-size: 0.95rem;
   line-height: 1.7;
-  color: #e2e8f0;
+  color: var(--text-primary);
   tab-size: 2;
 }
 

@@ -424,12 +424,12 @@ function formatDate(isoString: string): string {
 }
 
 .item-icon-json {
-  color: #fbbf24;
+  color: var(--accent-warning);
   flex-shrink: 0;
 }
 
 .item-icon-md {
-  color: #818cf8;
+  color: var(--accent-primary);
   flex-shrink: 0;
 }
 
@@ -502,7 +502,7 @@ function formatDate(isoString: string): string {
 
 .search-input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px var(--border-subtle);
 }
 
 .btn-clear-search {
@@ -557,7 +557,7 @@ function formatDate(isoString: string): string {
 .tag-filter-pill.active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #ffffff;
+  color: var(--text-inverse);
 }
 
 .sidebar-list {
@@ -612,7 +612,7 @@ function formatDate(isoString: string): string {
 
 .note-list-item.active {
   background-color: var(--bg-surface-active);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: var(--border-focus);
 }
 
 .note-item-header {
@@ -684,8 +684,9 @@ function formatDate(isoString: string): string {
 }
 
 .tag-chip {
-  background: rgba(99, 102, 241, 0.12);
-  color: #a5b4fc;
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-subtle);
   font-size: 0.65rem;
   padding: 0.05rem 0.35rem;
   border-radius: var(--radius-sm);
