@@ -13,7 +13,7 @@ export default defineNuxtConfig({
       title: 'Markdown Note App',
       meta: [
         { name: 'description', content: 'Modern fullstack markdown note editor with live preview' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' }
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },

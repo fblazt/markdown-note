@@ -177,6 +177,7 @@ describe('Composable: useNotes', () => {
   });
 
   it('switches view mode correctly', () => {
+    composable.isMobile.value = false;
     composable.setViewMode('editor');
     expect(composable.viewMode.value).toBe('editor');
 
@@ -185,5 +186,65 @@ describe('Composable: useNotes', () => {
 
     composable.setViewMode('split');
     expect(composable.viewMode.value).toBe('split');
+  });
+
+  describe('Mobile helpers and navigation', () => {
+    it('computes effectiveViewMode correctly for desktop and mobile', () => {
+      composable.isMobile.value = false;
+      composable.viewMode.value = 'split';
+      expect(composable.effectiveViewMode.value).toBe('split');
+
+      composable.isMobile.value = true;
+      expect(composable.effectiveViewMode.value).toBe('editor');
+
+      composable.viewMode.value = 'preview';
+      expect(composable.effectiveViewMode.value).toBe('preview');
+
+      composable.viewMode.value = 'editor';
+      expect(composable.effectiveViewMode.value).toBe('editor');
+    });
+
+    it('openNote selects note and adjusts state on mobile', () => {
+      composable.isMobile.value = true;
+      composable.isSidebarOpen.value = true;
+      composable.viewMode.value = 'split';
+
+      composable.openNote('note-2');
+
+      expect(composable.selectedNoteId.value).toBe('note-2');
+      expect(composable.activeNote.value?.title).toBe('Nitro Backend');
+      expect(composable.isSidebarOpen.value).toBe(false);
+      expect(composable.viewMode.value).toBe('editor');
+    });
+
+    it('navigateBackToList opens sidebar', () => {
+      composable.isSidebarOpen.value = false;
+      composable.navigateBackToList();
+      expect(composable.isSidebarOpen.value).toBe(true);
+    });
+
+    it('createNote on mobile closes sidebar and sets editor view', async () => {
+      composable.isMobile.value = true;
+      composable.isSidebarOpen.value = true;
+      composable.viewMode.value = 'split';
+
+      const created = await composable.createNote({
+        title: 'Mobile Note',
+        content: 'Testing mobile create',
+      });
+
+      expect(created).not.toBeNull();
+      expect(composable.isSidebarOpen.value).toBe(false);
+      expect(composable.viewMode.value).toBe('editor');
+    });
+
+    it('setViewMode on mobile prevents split mode', () => {
+      composable.isMobile.value = true;
+      composable.setViewMode('split');
+      expect(composable.viewMode.value).toBe('editor');
+
+      composable.setViewMode('preview');
+      expect(composable.viewMode.value).toBe('preview');
+    });
   });
 });

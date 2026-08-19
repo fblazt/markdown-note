@@ -75,7 +75,7 @@
         :key="note.id"
         class="note-list-item"
         :class="{ active: selectedNoteId === note.id }"
-        @click="selectNote(note.id)"
+        @click="openNote(note.id)"
       >
         <div class="note-item-main">
           <div class="note-item-header">
@@ -84,8 +84,9 @@
               class="btn-icon btn-icon-danger btn-delete-note"
               @click.stop="handleDeleteNote(note.id, note.title)"
               title="Delete Note"
+              aria-label="Delete Note"
             >
-              <Trash2 :size="14" />
+              <Trash2 :size="15" />
             </button>
           </div>
 
@@ -138,7 +139,7 @@ const {
   filteredNotes,
   isLoading,
   isSidebarOpen,
-  selectNote,
+  openNote,
   createNote,
   deleteNote,
   toggleTagFilter,
@@ -309,6 +310,7 @@ function formatDate(isoString: string): string {
   overflow-x: auto;
   padding-bottom: 0.25rem;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tags-filter-scroll::-webkit-scrollbar {
@@ -345,6 +347,7 @@ function formatDate(isoString: string): string {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-state-message {
@@ -412,12 +415,19 @@ function formatDate(isoString: string): string {
 
 .btn-delete-note {
   opacity: 0;
-  padding: 0.25rem;
+  padding: 0.3rem;
+  border-radius: var(--radius-sm);
   transition: opacity 0.15s ease;
 }
 
 .note-list-item:hover .btn-delete-note {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .btn-delete-note {
+    opacity: 0.85;
+  }
 }
 
 .note-item-preview {
@@ -465,5 +475,23 @@ function formatDate(isoString: string): string {
 .tag-chip-more {
   font-size: 0.65rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 767px) {
+  .note-sidebar {
+    width: 100%;
+    min-width: 100%;
+    border-right: none;
+    flex: 1;
+  }
+
+  .btn-delete-note {
+    opacity: 0.85;
+    padding: 0.4rem;
+  }
+
+  .note-list-item {
+    padding: 0.85rem 1rem;
+  }
 }
 </style>

@@ -64,6 +64,7 @@
           class="toolbar-btn"
           @click="insertFormat('bold')"
           title="Bold (Ctrl+B)"
+          aria-label="Bold"
         >
           <Bold :size="15" />
         </button>
@@ -72,6 +73,7 @@
           class="toolbar-btn"
           @click="insertFormat('italic')"
           title="Italic (Ctrl+I)"
+          aria-label="Italic"
         >
           <Italic :size="15" />
         </button>
@@ -80,6 +82,7 @@
           class="toolbar-btn"
           @click="insertFormat('strikethrough')"
           title="Strikethrough"
+          aria-label="Strikethrough"
         >
           <Strikethrough :size="15" />
         </button>
@@ -91,6 +94,7 @@
           class="toolbar-btn"
           @click="insertFormat('h1')"
           title="Heading 1"
+          aria-label="Heading 1"
         >
           <Heading1 :size="15" />
         </button>
@@ -99,6 +103,7 @@
           class="toolbar-btn"
           @click="insertFormat('h2')"
           title="Heading 2"
+          aria-label="Heading 2"
         >
           <Heading2 :size="15" />
         </button>
@@ -107,6 +112,7 @@
           class="toolbar-btn"
           @click="insertFormat('h3')"
           title="Heading 3"
+          aria-label="Heading 3"
         >
           <Heading3 :size="15" />
         </button>
@@ -118,6 +124,7 @@
           class="toolbar-btn"
           @click="insertFormat('code')"
           title="Code Block"
+          aria-label="Code block"
         >
           <Code :size="15" />
         </button>
@@ -126,6 +133,7 @@
           class="toolbar-btn"
           @click="insertFormat('link')"
           title="Insert Link"
+          aria-label="Insert link"
         >
           <Link :size="15" />
         </button>
@@ -134,6 +142,7 @@
           class="toolbar-btn"
           @click="insertFormat('bullet-list')"
           title="Bullet List"
+          aria-label="Bullet list"
         >
           <List :size="15" />
         </button>
@@ -142,6 +151,7 @@
           class="toolbar-btn"
           @click="insertFormat('task-list')"
           title="Task List"
+          aria-label="Task list"
         >
           <ListTodo :size="15" />
         </button>
@@ -150,6 +160,7 @@
           class="toolbar-btn"
           @click="insertFormat('blockquote')"
           title="Quote"
+          aria-label="Quote"
         >
           <Quote :size="15" />
         </button>
@@ -158,6 +169,7 @@
           class="toolbar-btn"
           @click="insertFormat('table')"
           title="Insert Table"
+          aria-label="Insert table"
         >
           <Table :size="15" />
         </button>
@@ -396,6 +408,7 @@ function insertFormat(type: string) {
   gap: 0.6rem;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-app);
+  flex-shrink: 0;
 }
 
 .editor-title-row {
@@ -414,6 +427,7 @@ function insertFormat(type: string) {
   color: var(--text-primary);
   outline: none;
   font-family: var(--font-sans);
+  min-width: 0;
 }
 
 .title-input::placeholder {
@@ -445,6 +459,7 @@ function insertFormat(type: string) {
 
 .tag-icon {
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .tags-container {
@@ -452,6 +467,7 @@ function insertFormat(type: string) {
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
+  flex: 1;
 }
 
 .btn-remove-tag {
@@ -489,8 +505,10 @@ function insertFormat(type: string) {
   align-items: center;
   gap: 0.25rem;
   padding-top: 0.4rem;
+  padding-bottom: 0.15rem;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .editor-toolbar::-webkit-scrollbar {
@@ -508,6 +526,7 @@ function insertFormat(type: string) {
   align-items: center;
   justify-content: center;
   transition: all 0.12s ease;
+  flex-shrink: 0;
 }
 
 .toolbar-btn:hover {
@@ -520,6 +539,7 @@ function insertFormat(type: string) {
   height: 16px;
   background-color: var(--border-subtle);
   margin: 0 0.3rem;
+  flex-shrink: 0;
 }
 
 .editor-body {
@@ -527,6 +547,8 @@ function insertFormat(type: string) {
   display: flex;
   padding: 1.25rem;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .markdown-textarea {
@@ -565,5 +587,41 @@ function insertFormat(type: string) {
 
 .empty-message p {
   font-size: 0.85rem;
+}
+
+@media (max-width: 767px) {
+  .note-editor {
+    border-right: none;
+    width: 100%;
+  }
+
+  .editor-header {
+    padding: 0.75rem 1rem 0.4rem;
+    gap: 0.5rem;
+  }
+
+  .title-input {
+    font-size: 16px !important;
+    font-weight: 700;
+  }
+
+  .tag-input {
+    font-size: 16px !important;
+  }
+
+  .toolbar-btn {
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0.45rem;
+  }
+
+  .editor-body {
+    padding: 0.85rem 1rem;
+  }
+
+  .markdown-textarea {
+    font-size: 16px !important;
+    line-height: 1.6;
+  }
 }
 </style>

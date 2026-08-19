@@ -12,6 +12,16 @@ const isSaving = ref(false);
 const viewMode = ref<'split' | 'editor' | 'preview'>('split');
 const isSidebarOpen = ref(true);
 
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+// Global resize listener for mobile breakpoint if in browser
+if (typeof window !== 'undefined') {
+  const updateMobile = () => {
+    isMobile.value = window.innerWidth < 768;
+  };
+  window.addEventListener('resize', updateMobile);
+}
+
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveDTO: UpdateNoteDTO | null = null;
 
@@ -19,6 +29,13 @@ export function useNotes() {
   const activeNote = computed<Note | null>(() => {
     if (!selectedNoteId.value) return null;
     return notes.value.find((n) => n.id === selectedNoteId.value) || null;
+  });
+
+  const effectiveViewMode = computed<'split' | 'editor' | 'preview'>(() => {
+    if (isMobile.value && viewMode.value === 'split') {
+      return 'editor';
+    }
+    return viewMode.value;
   });
 
   const allTags = computed<string[]>(() => {
@@ -54,6 +71,13 @@ export function useNotes() {
     });
   });
 
+  function checkMobile(): boolean {
+    if (typeof window !== 'undefined') {
+      isMobile.value = window.innerWidth < 768;
+    }
+    return isMobile.value;
+  }
+
   async function fetchNotes(): Promise<void> {
     isLoading.value = true;
     try {
@@ -76,6 +100,20 @@ export function useNotes() {
     saveStatus.value = 'idle';
   }
 
+  function openNote(id: string): void {
+    selectNote(id);
+    if (isMobile.value) {
+      isSidebarOpen.value = false;
+      if (viewMode.value === 'split') {
+        viewMode.value = 'editor';
+      }
+    }
+  }
+
+  function navigateBackToList(): void {
+    isSidebarOpen.value = true;
+  }
+
   async function createNote(dto?: Partial<CreateNoteDTO>): Promise<Note | null> {
     flushAutoSave();
     isLoading.value = true;
@@ -94,6 +132,14 @@ export function useNotes() {
       notes.value = [created, ...notes.value];
       selectedNoteId.value = created.id;
       saveStatus.value = 'saved';
+
+      if (isMobile.value) {
+        isSidebarOpen.value = false;
+        if (viewMode.value === 'split') {
+          viewMode.value = 'editor';
+        }
+      }
+
       return created;
     } catch (err) {
       console.error('Failed to create note:', err);
@@ -211,7 +257,11 @@ export function useNotes() {
   }
 
   function setViewMode(mode: 'split' | 'editor' | 'preview'): void {
-    viewMode.value = mode;
+    if (isMobile.value && mode === 'split') {
+      viewMode.value = 'editor';
+    } else {
+      viewMode.value = mode;
+    }
   }
 
   function toggleSidebar(): void {
@@ -231,11 +281,15 @@ export function useNotes() {
     isLoading,
     isSaving,
     viewMode,
+    effectiveViewMode,
     isSidebarOpen,
+    isMobile,
 
     // Actions
     fetchNotes,
     selectNote,
+    openNote,
+    navigateBackToList,
     createNote,
     updateNote,
     deleteNote,
@@ -244,5 +298,6 @@ export function useNotes() {
     toggleTagFilter,
     setViewMode,
     toggleSidebar,
+    checkMobile,
   };
 }

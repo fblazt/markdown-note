@@ -12,6 +12,7 @@
           class="btn-action"
           @click="copyMarkdown"
           :title="copiedMd ? 'Copied Markdown!' : 'Copy raw Markdown'"
+          aria-label="Copy raw Markdown"
         >
           <Check v-if="copiedMd" :size="14" class="text-success" />
           <Copy v-else :size="14" />
@@ -22,6 +23,7 @@
           class="btn-action"
           @click="copyHtml"
           :title="copiedHtml ? 'Copied HTML!' : 'Copy sanitized HTML'"
+          aria-label="Copy sanitized HTML"
         >
           <Check v-if="copiedHtml" :size="14" class="text-success" />
           <Code v-else :size="14" />
@@ -184,6 +186,7 @@ async function copyHtml() {
   overflow-y: auto;
   padding: 1.5rem 1.75rem;
   min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .preview-empty {
@@ -222,5 +225,29 @@ async function copyHtml() {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+}
+
+@media (max-width: 767px) {
+  .preview-header {
+    height: auto;
+    min-height: 48px;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn-action {
+    min-height: 38px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .preview-scroll-container {
+    padding: 1rem 1.15rem;
+  }
+
+  .preview-stats-bar {
+    padding: 0.45rem 1rem;
+    font-size: 0.7rem;
+    gap: 0.4rem;
+  }
 }
 </style>
