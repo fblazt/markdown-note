@@ -28,6 +28,16 @@
           </div>
 
           <ExportDropdown :note="activeNote" />
+
+          <button
+            type="button"
+            class="btn-icon btn-icon-danger btn-header-delete"
+            title="Delete Note"
+            aria-label="Delete Note"
+            @click="handleDeleteActiveNote"
+          >
+            <Trash2 :size="15" />
+          </button>
         </div>
       </div>
 
@@ -223,14 +233,33 @@ import {
   AlertCircle,
   Tag,
   X,
+  Trash2,
 } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
+import { useConfirm } from '../composables/useConfirm';
 import ExportDropdown from './ExportDropdown.vue';
 
-const { activeNote, saveStatus, queueAutoSave, flushAutoSave } = useNotes();
+const { activeNote, saveStatus, queueAutoSave, flushAutoSave, deleteNote } = useNotes();
+const { confirm } = useConfirm();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const newTagInput = ref('');
+
+async function handleDeleteActiveNote() {
+  if (!activeNote.value) return;
+  const confirmed = await confirm({
+    title: 'Delete Note',
+    message: 'Are you sure you want to delete this note? This action cannot be undone.',
+    itemTitle: activeNote.value.title || 'Untitled Note',
+    variant: 'danger',
+    confirmText: 'Delete Note',
+    cancelText: 'Cancel',
+  });
+
+  if (confirmed) {
+    await deleteNote(activeNote.value.id);
+  }
+}
 
 function handleTitleInput(e: Event) {
   const target = e.target as HTMLInputElement;

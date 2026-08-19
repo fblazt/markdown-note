@@ -110,6 +110,9 @@
         <span class="status-notes-total">{{ notes.length }} notes</span>
       </div>
     </footer>
+
+    <!-- Global Confirmation Dialog Modal -->
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -130,6 +133,7 @@ import NoteSidebar from './components/NoteSidebar.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import NotePreview from './components/NotePreview.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 
 const {
   notes,

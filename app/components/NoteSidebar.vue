@@ -190,6 +190,7 @@ import {
   Braces,
 } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
+import { useConfirm } from '../composables/useConfirm';
 import { exportNoteJson, exportCombinedMarkdown, downloadBlob } from '../utils/export';
 
 const {
@@ -207,6 +208,8 @@ const {
   toggleTagFilter,
   flushAutoSave,
 } = useNotes();
+
+const { confirm } = useConfirm();
 
 const isExportOpen = ref(false);
 const exportMenuRef = ref<HTMLElement | null>(null);
@@ -264,7 +267,16 @@ async function handleCreateNote() {
 }
 
 async function handleDeleteNote(id: string, title: string) {
-  if (confirm(`Are you sure you want to delete "${title || 'Untitled Note'}"?`)) {
+  const confirmed = await confirm({
+    title: 'Delete Note',
+    message: 'Are you sure you want to delete this note? This action cannot be undone.',
+    itemTitle: title || 'Untitled Note',
+    variant: 'danger',
+    confirmText: 'Delete Note',
+    cancelText: 'Cancel',
+  });
+
+  if (confirmed) {
     await deleteNote(id);
   }
 }
