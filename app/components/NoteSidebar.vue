@@ -4,11 +4,22 @@
     <div class="sidebar-header">
       <div class="sidebar-brand">
         <FileText class="icon-brand" :size="20" />
-        <h2>All Notes</h2>
+        <h2>Markdown Notes</h2>
         <span class="notes-count-badge">{{ notes.length }}</span>
       </div>
 
       <div class="sidebar-header-actions">
+        <!-- New Folder Button -->
+        <button
+          type="button"
+          class="btn-icon btn-new-folder"
+          title="Create New Folder"
+          aria-label="Create New Folder"
+          @click="startCreateFolder"
+        >
+          <FolderPlus :size="15" />
+        </button>
+
         <!-- Export All Dropdown -->
         <div ref="exportMenuRef" class="export-all-wrapper">
           <button
@@ -65,9 +76,47 @@
           </transition>
         </div>
 
-        <button class="btn btn-primary btn-new-note" @click="handleCreateNote" title="Create New Note (Ctrl+N)">
+        <button
+          class="btn btn-primary btn-new-note"
+          title="Create New Note (Ctrl+N)"
+          @click="handleCreateNote()"
+        >
           <Plus :size="16" />
           <span>New Note</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Inline Create Folder Form -->
+    <div v-if="isCreatingFolder" class="inline-folder-form">
+      <div class="folder-input-wrapper">
+        <FolderPlus :size="14" class="folder-form-icon" />
+        <input
+          ref="createFolderInputRef"
+          v-model="newFolderName"
+          type="text"
+          placeholder="Folder name..."
+          class="folder-input"
+          @keydown.enter="submitCreateFolder"
+          @keydown.escape="cancelCreateFolder"
+        />
+      </div>
+      <div class="folder-form-actions">
+        <button
+          type="button"
+          class="btn-folder-action btn-folder-confirm"
+          title="Confirm"
+          @click="submitCreateFolder"
+        >
+          <Check :size="13" />
+        </button>
+        <button
+          type="button"
+          class="btn-folder-action btn-folder-cancel"
+          title="Cancel"
+          @click="cancelCreateFolder"
+        >
+          <X :size="13" />
         </button>
       </div>
     </div>
@@ -85,8 +134,8 @@
         <button
           v-if="searchQuery"
           class="btn-clear-search"
-          @click="searchQuery = ''"
           title="Clear search"
+          @click="searchQuery = ''"
         >
           <X :size="14" />
         </button>
@@ -113,62 +162,161 @@
       </div>
     </div>
 
-    <!-- Notes List -->
+    <!-- Notes & Folder Tree List -->
     <div class="sidebar-list">
+      <!-- Loading State -->
       <div v-if="isLoading && notes.length === 0" class="sidebar-state-message">
         <div class="spinner"></div>
-        <span>Loading notes...</span>
+        <span>Loading notes & folders...</span>
       </div>
 
+      <!-- Empty Matching State -->
       <div v-else-if="filteredNotes.length === 0" class="sidebar-state-message">
         <p v-if="searchQuery || selectedTag">No matching notes found</p>
         <p v-else>No notes yet. Create your first note!</p>
-        <button class="btn btn-secondary btn-sm mt-2" @click="handleCreateNote">
+        <button class="btn btn-secondary btn-sm mt-2" @click="handleCreateNote()">
           <Plus :size="14" /> Create Note
         </button>
       </div>
 
-      <div
-        v-for="note in filteredNotes"
-        :key="note.id"
-        class="note-list-item"
-        :class="{ active: selectedNoteId === note.id }"
-        @click="openNote(note.id)"
-      >
-        <div class="note-item-main">
-          <div class="note-item-header">
-            <h3 class="note-item-title">{{ note.title || 'Untitled Note' }}</h3>
-            <button
-              class="btn-icon btn-icon-danger btn-delete-note"
-              @click.stop="handleDeleteNote(note.id, note.title)"
-              title="Delete Note"
-              aria-label="Delete Note"
-            >
-              <Trash2 :size="15" />
-            </button>
+      <!-- Directory Tree Content -->
+      <div v-else class="folder-tree-container">
+        <!-- "All Notes" Selector Row (Drop target for moving notes/folders to root) -->
+        <div
+          class="all-notes-row"
+          :class="{
+            active: selectedFolder === null,
+            'is-drop-target': currentDropTarget === '__all__',
+          }"
+          @dragover.prevent="handleAllNotesDragEnter"
+          @dragenter.prevent="handleAllNotesDragEnter"
+          @dragleave="handleAllNotesDragLeave"
+          @drop.prevent="handleAllNotesDrop"
+          @click="selectedFolder = null"
+        >
+          <div class="all-notes-info">
+            <Layers :size="15" class="all-notes-icon" />
+            <span class="all-notes-label">All Notes</span>
+          </div>
+          <span class="folder-count-badge">{{ notes.length }}</span>
+        </div>
+
+        <!-- Hierarchical Folder Tree -->
+        <FolderTreeNodeItem
+          v-for="rootNode in folderTree"
+          :key="rootNode.path"
+          :node="rootNode"
+          :renaming-folder-path="renamingFolderPath"
+          :creating-subfolder-parent="creatingSubfolderParent"
+          :current-drop-target="currentDropTarget"
+          :dragged-item="draggedItem"
+          @start-create-subfolder="startCreateSubfolder"
+          @submit-create-subfolder="submitCreateSubfolder"
+          @cancel-create-subfolder="cancelCreateSubfolder"
+          @start-rename-folder="startRenameFolder"
+          @submit-rename-folder="submitRenameFolder"
+          @cancel-rename-folder="cancelRenameFolder"
+          @delete-folder="handleDeleteFolder"
+          @create-note="handleCreateNote"
+          @open-note="openNote"
+          @delete-note="handleDeleteNote"
+          @drag-start-note="handleDragStartNote"
+          @drag-start-folder="handleDragStartFolder"
+          @drag-end="handleDragEnd"
+          @folder-drag-enter="handleFolderDragEnter"
+          @folder-drag-leave="handleFolderDragLeave"
+          @folder-drop="handleFolderDrop"
+        />
+
+        <!-- Uncategorized Notes Section -->
+        <div v-if="rootNotes.length > 0" class="folder-section uncategorized-section">
+          <div
+            class="folder-header uncategorized-header"
+            :class="{
+              active: selectedFolder === '__root__',
+              expanded: isFolderExpanded('__uncategorized__'),
+              'is-drop-target': currentDropTarget === '__uncategorized__',
+            }"
+            @dragover.prevent="handleUncategorizedDragEnter"
+            @dragenter.prevent="handleUncategorizedDragEnter"
+            @dragleave="handleUncategorizedDragLeave"
+            @drop.prevent="handleUncategorizedDrop"
+            @click="handleFolderClick('__uncategorized__')"
+          >
+            <div class="folder-header-left">
+              <button
+                type="button"
+                class="btn-folder-toggle"
+                @click.stop="toggleFolder('__uncategorized__')"
+              >
+                <ChevronDown v-if="isFolderExpanded('__uncategorized__')" :size="14" />
+                <ChevronRight v-else :size="14" />
+              </button>
+
+              <Folder :size="16" class="folder-icon uncategorized-icon" />
+              <span class="folder-name">Uncategorized</span>
+            </div>
+
+            <div class="folder-header-right">
+              <span class="folder-count-badge">{{ rootNotes.length }}</span>
+            </div>
           </div>
 
-          <p class="note-item-preview">
-            {{ getPreviewSnippet(note.content) }}
-          </p>
+          <!-- Uncategorized Notes List -->
+          <div
+            v-if="isFolderExpanded('__uncategorized__')"
+            class="folder-notes-container"
+          >
+            <div
+              v-for="note in rootNotes"
+              :key="note.id"
+              class="note-list-item folder-note-item"
+              :class="{
+                active: selectedNoteId === note.id,
+                'is-dragging': draggedItem?.type === 'note' && draggedItem?.noteId === note.id,
+              }"
+              draggable="true"
+              @dragstart="handleDragStartNote($event, note)"
+              @dragend="handleDragEnd"
+              @click="openNote(note.id)"
+            >
+              <div class="note-item-main">
+                <div class="note-item-header">
+                  <h3 class="note-item-title">{{ note.title || 'Untitled Note' }}</h3>
+                  <button
+                    class="btn-icon btn-icon-danger btn-delete-note"
+                    title="Delete Note"
+                    aria-label="Delete Note"
+                    @click.stop="handleDeleteNote(note.id, note.title)"
+                  >
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
 
-          <div class="note-item-meta">
-            <span class="note-date">
-              <Calendar :size="11" />
-              {{ formatDate(note.updatedAt) }}
-            </span>
+                <p class="note-item-preview">
+                  {{ getPreviewSnippet(note.content) }}
+                </p>
 
-            <div v-if="note.tags && note.tags.length > 0" class="note-tags-list">
-              <span
-                v-for="t in note.tags.slice(0, 3)"
-                :key="t"
-                class="tag-chip"
-              >
-                #{{ t }}
-              </span>
-              <span v-if="note.tags.length > 3" class="tag-chip-more">
-                +{{ note.tags.length - 3 }}
-              </span>
+                <div class="note-item-meta">
+                  <span class="note-date">
+                    <Calendar :size="11" />
+                    {{ formatDate(note.updatedAt) }}
+                  </span>
+
+                  <div v-if="note.tags && note.tags.length > 0" class="note-tags-list">
+                    <span
+                      v-for="t in note.tags.slice(0, 2)"
+                      :key="t"
+                      class="tag-chip"
+                    >
+                      #{{ t }}
+                    </span>
+                    <span v-if="note.tags.length > 2" class="tag-chip-more">
+                      +{{ note.tags.length - 2 }}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -178,23 +326,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted } from 'vue';
 import {
   FileText,
   Plus,
   Search,
   X,
+  Check,
   Trash2,
   Calendar,
   Download,
   Braces,
+  Folder,
+  FolderPlus,
+  ChevronDown,
+  ChevronRight,
+  Layers,
 } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
 import { useConfirm } from '../composables/useConfirm';
 import { exportNoteJson, exportCombinedMarkdown, downloadBlob } from '../utils/export';
+import FolderTreeNodeItem from './FolderTreeNodeItem.vue';
+import type { Note } from '../../shared/types/note';
 
 const {
   notes,
+  folderTree,
+  rootNotes,
+  expandedFolders,
+  selectedFolder,
   selectedNoteId,
   searchQuery,
   selectedTag,
@@ -205,6 +365,13 @@ const {
   openNote,
   createNote,
   deleteNote,
+  createFolder,
+  createSubfolder,
+  renameFolder,
+  moveFolder,
+  moveNoteToFolder,
+  deleteFolder,
+  toggleFolder,
   toggleTagFilter,
   flushAutoSave,
 } = useNotes();
@@ -213,6 +380,232 @@ const { confirm } = useConfirm();
 
 const isExportOpen = ref(false);
 const exportMenuRef = ref<HTMLElement | null>(null);
+
+// Folder creation inline state
+const isCreatingFolder = ref(false);
+const newFolderName = ref('');
+const createFolderInputRef = ref<HTMLInputElement | null>(null);
+
+// Subfolder creation inline state
+const creatingSubfolderParent = ref<string | null>(null);
+
+// Folder rename inline state
+const renamingFolderPath = ref<string | null>(null);
+
+// Drag and drop state
+const draggedItem = ref<
+  { type: 'note'; noteId: string; sourceFolder?: string } | { type: 'folder'; path: string } | null
+>(null);
+const currentDropTarget = ref<string | null>(null);
+const isDragging = ref(false);
+
+function isFolderExpanded(folderName: string): boolean {
+  if (folderName === '__uncategorized__') {
+    return expandedFolders.value.includes('__uncategorized__') || expandedFolders.value.includes('Uncategorized');
+  }
+  return expandedFolders.value.includes(folderName);
+}
+
+function handleFolderClick(folderName: string) {
+  if (folderName === '__uncategorized__') {
+    selectedFolder.value = selectedFolder.value === '__root__' ? null : '__root__';
+    toggleFolder('__uncategorized__');
+  } else {
+    toggleFolder(folderName);
+  }
+}
+
+function startCreateFolder() {
+  isCreatingFolder.value = true;
+  newFolderName.value = '';
+  nextTick(() => {
+    createFolderInputRef.value?.focus();
+  });
+}
+
+function cancelCreateFolder() {
+  isCreatingFolder.value = false;
+  newFolderName.value = '';
+}
+
+async function submitCreateFolder() {
+  const trimmed = newFolderName.value.trim();
+  if (trimmed) {
+    await createFolder(trimmed);
+  }
+  isCreatingFolder.value = false;
+  newFolderName.value = '';
+}
+
+function startCreateSubfolder(parentPath: string) {
+  creatingSubfolderParent.value = parentPath;
+}
+
+async function submitCreateSubfolder(parentPath: string, subfolderName: string) {
+  const trimmed = subfolderName.trim();
+  if (trimmed) {
+    await createSubfolder(parentPath, trimmed);
+  }
+  creatingSubfolderParent.value = null;
+}
+
+function cancelCreateSubfolder() {
+  creatingSubfolderParent.value = null;
+}
+
+function startRenameFolder(path: string, _currentName: string) {
+  renamingFolderPath.value = path;
+}
+
+function cancelRenameFolder() {
+  renamingFolderPath.value = null;
+}
+
+async function submitRenameFolder(oldPath: string, newName: string) {
+  const trimmed = newName.trim();
+  if (trimmed) {
+    const lastSlash = oldPath.lastIndexOf('/');
+    const parentPath = lastSlash !== -1 ? oldPath.substring(0, lastSlash) : '';
+    let newFullPath = trimmed;
+    if (trimmed.includes('/')) {
+      newFullPath = trimmed;
+    } else if (parentPath) {
+      newFullPath = `${parentPath}/${trimmed}`;
+    }
+    if (oldPath !== newFullPath) {
+      await renameFolder(oldPath, newFullPath);
+    }
+  }
+  renamingFolderPath.value = null;
+}
+
+async function handleDeleteFolder(folderName: string) {
+  const confirmed = await confirm({
+    title: 'Delete Folder',
+    message: `Are you sure you want to delete folder "${folderName}" and all its subfolders? Notes inside will become uncategorized.`,
+    itemTitle: folderName,
+    variant: 'danger',
+    confirmText: 'Delete Folder',
+    cancelText: 'Cancel',
+  });
+
+  if (confirmed) {
+    await deleteFolder(folderName, false);
+  }
+}
+
+// Drag & Drop Event Handlers
+function handleDragStartNote(e: DragEvent, note: Note) {
+  isDragging.value = true;
+  draggedItem.value = { type: 'note', noteId: note.id, sourceFolder: note.folder };
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({
+        type: 'note',
+        noteId: note.id,
+        sourceFolder: note.folder,
+      })
+    );
+    e.dataTransfer.setData('text/plain', note.id);
+  }
+}
+
+function handleDragStartFolder(e: DragEvent, folderPath: string) {
+  isDragging.value = true;
+  draggedItem.value = { type: 'folder', path: folderPath };
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({
+        type: 'folder',
+        folderPath,
+      })
+    );
+    e.dataTransfer.setData('text/plain', folderPath);
+  }
+}
+
+function handleDragEnd() {
+  isDragging.value = false;
+  draggedItem.value = null;
+  currentDropTarget.value = null;
+}
+
+function handleFolderDragEnter(folderPath: string) {
+  if (draggedItem.value?.type === 'folder') {
+    if (folderPath === draggedItem.value.path || folderPath.startsWith(draggedItem.value.path + '/')) {
+      return;
+    }
+  }
+  currentDropTarget.value = folderPath;
+}
+
+function handleFolderDragLeave(folderPath: string) {
+  if (currentDropTarget.value === folderPath) {
+    currentDropTarget.value = null;
+  }
+}
+
+async function handleFolderDrop(targetFolderPath: string) {
+  const data = draggedItem.value;
+  handleDragEnd();
+  if (!data) return;
+
+  if (data.type === 'note' && data.noteId) {
+    await moveNoteToFolder(data.noteId, targetFolderPath);
+  } else if (data.type === 'folder' && data.path) {
+    if (data.path !== targetFolderPath && !targetFolderPath.startsWith(data.path + '/')) {
+      await moveFolder(data.path, targetFolderPath);
+    }
+  }
+}
+
+function handleAllNotesDragEnter() {
+  currentDropTarget.value = '__all__';
+}
+
+function handleAllNotesDragLeave() {
+  if (currentDropTarget.value === '__all__') {
+    currentDropTarget.value = null;
+  }
+}
+
+async function handleAllNotesDrop() {
+  const data = draggedItem.value;
+  handleDragEnd();
+  if (!data) return;
+
+  if (data.type === 'note' && data.noteId) {
+    await moveNoteToFolder(data.noteId, '');
+  } else if (data.type === 'folder' && data.path) {
+    await moveFolder(data.path, '');
+  }
+}
+
+function handleUncategorizedDragEnter() {
+  currentDropTarget.value = '__uncategorized__';
+}
+
+function handleUncategorizedDragLeave() {
+  if (currentDropTarget.value === '__uncategorized__') {
+    currentDropTarget.value = null;
+  }
+}
+
+async function handleUncategorizedDrop() {
+  const data = draggedItem.value;
+  handleDragEnd();
+  if (!data) return;
+
+  if (data.type === 'note' && data.noteId) {
+    await moveNoteToFolder(data.noteId, '');
+  } else if (data.type === 'folder' && data.path) {
+    await moveFolder(data.path, '');
+  }
+}
 
 function toggleExportMenu(e: MouseEvent) {
   e.stopPropagation();
@@ -239,8 +632,11 @@ function handleClickOutside(event: MouseEvent) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isExportOpen.value) {
-    isExportOpen.value = false;
+  if (event.key === 'Escape') {
+    if (isExportOpen.value) isExportOpen.value = false;
+    if (isCreatingFolder.value) cancelCreateFolder();
+    if (creatingSubfolderParent.value) cancelCreateSubfolder();
+    if (renamingFolderPath.value) cancelRenameFolder();
   }
 }
 
@@ -248,6 +644,10 @@ onMounted(() => {
   if (typeof document !== 'undefined') {
     document.addEventListener('click', handleClickOutside);
     document.addEventListener('keydown', handleKeydown);
+  }
+  // Ensure default folders expand
+  if (!expandedFolders.value.includes('__uncategorized__')) {
+    expandedFolders.value.push('__uncategorized__');
   }
 });
 
@@ -258,11 +658,12 @@ onUnmounted(() => {
   }
 });
 
-async function handleCreateNote() {
+async function handleCreateNote(folderName?: string) {
   await createNote({
     title: 'Untitled Note',
     content: '# New Note\n\nStart writing here...',
     tags: [],
+    folder: folderName,
   });
 }
 
@@ -283,7 +684,6 @@ async function handleDeleteNote(id: string, title: string) {
 
 function getPreviewSnippet(content: string): string {
   if (!content) return 'No additional text';
-  // Strip common markdown markers for a clean snippet
   const clean = content
     .replace(/^#+\s+/gm, '')
     .replace(/(\*\*|__)(.*?)\1/g, '$2')
@@ -318,6 +718,27 @@ function formatDate(isoString: string): string {
 </script>
 
 <style scoped>
+/* Drag and Drop Visual Feedback */
+.is-dragging {
+  opacity: 0.4 !important;
+  cursor: grabbing !important;
+}
+
+.is-drop-target {
+  outline: 2px dashed var(--accent-primary) !important;
+  outline-offset: -2px;
+  background-color: var(--bg-surface-active) !important;
+  box-shadow: 0 0 8px rgba(122, 168, 159, 0.3) !important;
+}
+
+.all-notes-row.is-drop-target,
+.uncategorized-header.is-drop-target {
+  outline: 2px dashed var(--accent-primary) !important;
+  outline-offset: -2px;
+  background-color: var(--bg-surface-active) !important;
+  box-shadow: 0 0 8px rgba(122, 168, 159, 0.3) !important;
+}
+
 .note-sidebar {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
@@ -331,62 +752,78 @@ function formatDate(isoString: string): string {
 }
 
 .sidebar-header {
-  padding: 1rem 1.15rem;
+  padding: 0.85rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
+  gap: 0.5rem;
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .sidebar-brand h2 {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icon-brand {
   color: var(--accent-primary);
+  flex-shrink: 0;
 }
 
 .notes-count-badge {
   background-color: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 0.7rem;
-  padding: 0.1rem 0.45rem;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
   border-radius: var(--radius-full);
   font-weight: 600;
   border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .sidebar-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
-.export-all-wrapper {
-  position: relative;
-  display: inline-flex;
-}
-
+.btn-new-folder,
 .btn-export-all {
   border: 1px solid var(--border-subtle);
   background-color: var(--bg-surface);
   color: var(--text-secondary);
   padding: 0.35rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 
+.btn-new-folder:hover,
 .btn-export-all:hover,
 .btn-export-all.active {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
   border-color: var(--border-focus);
+}
+
+.export-all-wrapper {
+  position: relative;
+  display: inline-flex;
 }
 
 .export-all-menu {
@@ -476,14 +913,94 @@ function formatDate(isoString: string): string {
 
 .btn-new-note {
   font-size: 0.78rem;
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Inline Create/Rename Folder Form */
+.inline-folder-form {
+  padding: 0.5rem 0.85rem;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.folder-rename-form {
+  border-radius: var(--radius-sm);
+  margin: 0.15rem 0.35rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.folder-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.folder-form-icon {
+  position: absolute;
+  left: 0.5rem;
+  color: var(--accent-primary);
+  pointer-events: none;
+}
+
+.folder-input {
+  width: 100%;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.4rem 0.3rem 1.8rem;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.folder-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.btn-folder-action {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.btn-folder-confirm {
+  color: var(--accent-success);
+}
+
+.btn-folder-confirm:hover {
+  background-color: var(--accent-success);
+  color: var(--text-inverse);
+}
+
+.btn-folder-cancel {
+  color: var(--text-muted);
+}
+
+.btn-folder-cancel:hover {
+  background-color: var(--accent-danger);
+  color: var(--text-inverse);
 }
 
 .sidebar-search-area {
-  padding: 0.75rem 1rem 0.5rem;
+  padding: 0.65rem 0.85rem 0.45rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.5rem;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -495,7 +1012,7 @@ function formatDate(isoString: string): string {
 
 .search-icon {
   position: absolute;
-  left: 0.75rem;
+  left: 0.65rem;
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -505,7 +1022,7 @@ function formatDate(isoString: string): string {
   background-color: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.45rem 1.8rem 0.45rem 2.1rem;
+  padding: 0.4rem 1.8rem 0.4rem 2rem;
   color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
@@ -519,7 +1036,7 @@ function formatDate(isoString: string): string {
 
 .btn-clear-search {
   position: absolute;
-  right: 0.5rem;
+  right: 0.4rem;
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -538,9 +1055,9 @@ function formatDate(isoString: string): string {
 
 .tags-filter-scroll {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.2rem;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -554,7 +1071,7 @@ function formatDate(isoString: string): string {
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 0.7rem;
-  padding: 0.15rem 0.55rem;
+  padding: 0.15rem 0.5rem;
   border-radius: var(--radius-full);
   cursor: pointer;
   white-space: nowrap;
@@ -575,10 +1092,9 @@ function formatDate(isoString: string): string {
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 0.4rem 0.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -608,21 +1124,226 @@ function formatDate(isoString: string): string {
   }
 }
 
-.note-list-item {
-  padding: 0.75rem 0.85rem;
+.folder-tree-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* All Notes Row */
+.all-notes-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.all-notes-row:hover {
+  background-color: var(--bg-surface);
+}
+
+.all-notes-row.active {
+  background-color: var(--bg-surface-active);
+  font-weight: 600;
+}
+
+.all-notes-info {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.all-notes-icon {
+  color: var(--accent-primary);
+}
+
+.all-notes-label {
+  font-size: 0.8rem;
+}
+
+/* Folder Section & Header */
+.folder-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.15rem;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.folder-header:hover {
+  background-color: var(--bg-surface);
+}
+
+.folder-header.active {
+  background-color: var(--bg-surface-active);
+}
+
+.folder-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.btn-folder-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.12s ease;
+}
+
+.btn-folder-toggle:hover {
+  color: var(--text-primary);
+}
+
+.folder-icon {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.folder-icon.open {
+  color: var(--accent-primary);
+}
+
+.folder-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.folder-count-badge {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-full);
+}
+
+.folder-hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.folder-header:hover .folder-hover-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .folder-hover-actions {
+    opacity: 0.9;
+  }
+}
+
+.btn-icon-folder {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.btn-icon-folder:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.btn-icon-folder-danger:hover {
+  background-color: rgba(196, 116, 110, 0.2);
+  color: var(--accent-danger);
+}
+
+/* Folder Notes Container */
+.folder-notes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 1.15rem;
+  margin-left: 0.45rem;
+  border-left: 1px dashed var(--border-subtle);
+  margin-top: 0.2rem;
+  margin-bottom: 0.35rem;
+}
+
+.folder-empty-notice {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-empty-add {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  color: var(--accent-primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.btn-empty-add:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent-primary);
+}
+
+.folder-note-item {
+  padding: 0.55rem 0.65rem;
   border-radius: var(--radius-md);
   background-color: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
-  position: relative;
+  transition: all 0.12s ease;
 }
 
-.note-list-item:hover {
+.folder-note-item:hover {
   background-color: var(--bg-surface);
 }
 
-.note-list-item.active {
+.folder-note-item.active {
   background-color: var(--bg-surface-active);
   border-color: var(--border-focus);
 }
@@ -631,12 +1352,12 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
 }
 
 .note-item-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -647,12 +1368,12 @@ function formatDate(isoString: string): string {
 
 .btn-delete-note {
   opacity: 0;
-  padding: 0.3rem;
+  padding: 0.25rem;
   border-radius: var(--radius-sm);
   transition: opacity 0.15s ease;
 }
 
-.note-list-item:hover .btn-delete-note {
+.folder-note-item:hover .btn-delete-note {
   opacity: 1;
 }
 
@@ -663,9 +1384,9 @@ function formatDate(isoString: string): string {
 }
 
 .note-item-preview {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.35rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -676,22 +1397,22 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.7rem;
+  gap: 0.4rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
 }
 
 .note-date {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   white-space: nowrap;
 }
 
 .note-tags-list {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   overflow: hidden;
 }
 
@@ -699,14 +1420,18 @@ function formatDate(isoString: string): string {
   background: var(--bg-surface);
   color: var(--accent-primary);
   border: 1px solid var(--border-subtle);
-  font-size: 0.65rem;
-  padding: 0.05rem 0.35rem;
+  font-size: 0.62rem;
+  padding: 0.04rem 0.3rem;
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
 .tag-chip-more {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.uncategorized-icon {
   color: var(--text-muted);
 }
 
@@ -718,13 +1443,23 @@ function formatDate(isoString: string): string {
     flex: 1;
   }
 
+  .folder-header {
+    min-height: 44px;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .btn-icon-folder {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
   .btn-delete-note {
     opacity: 0.85;
     padding: 0.4rem;
   }
 
-  .note-list-item {
-    padding: 0.85rem 1rem;
+  .folder-note-item {
+    padding: 0.75rem 0.85rem;
   }
 }
 </style>

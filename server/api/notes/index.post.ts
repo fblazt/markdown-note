@@ -15,6 +15,7 @@ export default defineEventHandler(async (event) => {
     title: body.title,
     content: body.content ?? '',
     tags: Array.isArray(body.tags) ? body.tags : [],
+    folder: body.folder,
   });
 
   setResponseStatus(event, 201);

@@ -1,8 +1,11 @@
-import { ref, computed } from 'vue';
-import type { Note, CreateNoteDTO, UpdateNoteDTO, SaveStatus } from '../../shared/types/note';
+import { ref, computed, watch } from 'vue';
+import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo, FolderTreeNode, SaveStatus } from '../../shared/types/note';
 
 // Singleton refs to preserve state across component re-renders
 const notes = ref<Note[]>([]);
+const folders = ref<FolderInfo[]>([]);
+const expandedFolders = ref<string[]>(['Guides', 'Projects', 'Code']);
+const selectedFolder = ref<string | null>(null);
 const selectedNoteId = ref<string | null>(null);
 const searchQuery = ref('');
 const selectedTag = ref<string | null>(null);
@@ -24,6 +27,56 @@ if (typeof window !== 'undefined') {
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveDTO: UpdateNoteDTO | null = null;
+
+function buildFolderTree(folderList: FolderInfo[], notesList: Note[]): FolderTreeNode[] {
+  const allPaths = new Set<string>();
+  for (const f of folderList) {
+    if (!f.name) continue;
+    const segs = f.name.split('/').filter(Boolean);
+    let cur = '';
+    for (const seg of segs) {
+      cur = cur ? `${cur}/${seg}` : seg;
+      allPaths.add(cur);
+    }
+  }
+
+  const nodeMap = new Map<string, FolderTreeNode>();
+  const sortedPaths = Array.from(allPaths).sort((a, b) => a.localeCompare(b));
+
+  for (const path of sortedPaths) {
+    const segs = path.split('/');
+    const name = segs[segs.length - 1]!;
+    const depth = segs.length - 1;
+    const noteCount = notesList.filter((n) => n.folder === path).length;
+
+    nodeMap.set(path, {
+      name,
+      path,
+      depth,
+      noteCount,
+      children: [],
+    });
+  }
+
+  const roots: FolderTreeNode[] = [];
+  for (const path of sortedPaths) {
+    const node = nodeMap.get(path)!;
+    const lastSlash = path.lastIndexOf('/');
+    if (lastSlash === -1) {
+      roots.push(node);
+    } else {
+      const parentPath = path.substring(0, lastSlash);
+      const parentNode = nodeMap.get(parentPath);
+      if (parentNode) {
+        parentNode.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+  }
+
+  return roots;
+}
 
 export function useNotes() {
   const activeNote = computed<Note | null>(() => {
@@ -50,7 +103,15 @@ export function useNotes() {
     return Array.from(tagsSet).sort();
   });
 
-  const filteredNotes = computed<Note[]>(() => {
+  const folderList = computed<FolderInfo[]>(() => {
+    return [...folders.value].sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  const folderTree = computed<FolderTreeNode[]>(() => {
+    return buildFolderTree(folders.value, notes.value);
+  });
+
+  const searchAndTagFilteredNotes = computed<Note[]>(() => {
     const query = searchQuery.value.trim().toLowerCase();
     const tagFilter = selectedTag.value;
 
@@ -60,15 +121,77 @@ export function useNotes() {
         return false;
       }
 
-      // Search query filter (matches title, content, or tags)
+      // Search query filter (matches title, content, tags, or folder)
       if (!query) return true;
 
       const titleMatch = note.title.toLowerCase().includes(query);
       const contentMatch = note.content.toLowerCase().includes(query);
       const tagMatch = note.tags?.some((t) => t.toLowerCase().includes(query));
+      const folderMatch = note.folder?.toLowerCase().includes(query);
 
-      return titleMatch || contentMatch || tagMatch;
+      return titleMatch || contentMatch || tagMatch || folderMatch;
     });
+  });
+
+  const notesByFolder = computed<Record<string, Note[]>>(() => {
+    const map: Record<string, Note[]> = {};
+    for (const folder of folders.value) {
+      map[folder.name] = [];
+    }
+    for (const note of searchAndTagFilteredNotes.value) {
+      if (note.folder) {
+        const targetList = map[note.folder] || (map[note.folder] = []);
+        targetList.push(note);
+      }
+    }
+    return map;
+  });
+
+  const rootNotes = computed<Note[]>(() => {
+    return searchAndTagFilteredNotes.value.filter((note) => !note.folder);
+  });
+
+  const filteredNotes = computed<Note[]>(() => {
+    const base = searchAndTagFilteredNotes.value;
+    if (!selectedFolder.value) {
+      return base;
+    }
+    if (selectedFolder.value === '__root__') {
+      return base.filter((note) => !note.folder);
+    }
+    return base.filter((note) => note.folder === selectedFolder.value);
+  });
+
+  // Auto-expand parent and child folders when searching/filtering
+  watch([searchQuery, selectedTag], ([q, tag]) => {
+    if (q || tag) {
+      for (const note of searchAndTagFilteredNotes.value) {
+        if (note.folder) {
+          const segs = note.folder.split('/');
+          let cur = '';
+          for (const seg of segs) {
+            cur = cur ? `${cur}/${seg}` : seg;
+            if (!expandedFolders.value.includes(cur)) {
+              expandedFolders.value.push(cur);
+            }
+          }
+        }
+      }
+      if (q) {
+        for (const folder of folders.value) {
+          if (folder.name.toLowerCase().includes(q.toLowerCase())) {
+            const segs = folder.name.split('/');
+            let cur = '';
+            for (const seg of segs) {
+              cur = cur ? `${cur}/${seg}` : seg;
+              if (!expandedFolders.value.includes(cur)) {
+                expandedFolders.value.push(cur);
+              }
+            }
+          }
+        }
+      }
+    }
   });
 
   function checkMobile(): boolean {
@@ -78,10 +201,239 @@ export function useNotes() {
     return isMobile.value;
   }
 
+  async function fetchFolders(): Promise<void> {
+    try {
+      const data = await $fetch<FolderInfo[]>('/api/folders');
+      folders.value = data;
+      const validNames = new Set(data.map((f) => f.name));
+      expandedFolders.value = expandedFolders.value.filter(
+        (name) => validNames.has(name) || name === '__uncategorized__'
+      );
+    } catch (err) {
+      console.error('Failed to fetch folders:', err);
+    }
+  }
+
+  function toggleFolder(folderName: string): void {
+    const index = expandedFolders.value.indexOf(folderName);
+    if (index === -1) {
+      expandedFolders.value.push(folderName);
+    } else {
+      expandedFolders.value.splice(index, 1);
+    }
+  }
+
+  function expandAllFolders(): void {
+    expandedFolders.value = folders.value.map((f) => f.name);
+  }
+
+  function collapseAllFolders(): void {
+    expandedFolders.value = [];
+  }
+
+  async function createFolder(name: string): Promise<boolean> {
+    const trimmed = name?.trim();
+    if (!trimmed) return false;
+    try {
+      await $fetch<{ success: boolean; name: string }>('/api/folders', {
+        method: 'POST',
+        body: { name: trimmed },
+      });
+      await fetchFolders();
+
+      // Auto-expand created folder and its ancestor folders
+      const segs = trimmed.split('/');
+      let cur = '';
+      for (const seg of segs) {
+        cur = cur ? `${cur}/${seg}` : seg;
+        if (!expandedFolders.value.includes(cur)) {
+          expandedFolders.value.push(cur);
+        }
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Failed to create folder:', err);
+      return false;
+    }
+  }
+
+  async function createSubfolder(parentPath: string, subfolderName: string): Promise<boolean> {
+    const trimmedSub = subfolderName?.trim();
+    if (!trimmedSub) return false;
+    const parent = parentPath?.trim();
+    const fullPath = parent ? `${parent}/${trimmedSub}` : trimmedSub;
+    return await createFolder(fullPath);
+  }
+
+  async function renameFolder(oldName: string, newName: string): Promise<boolean> {
+    const trimmedNew = newName?.trim();
+    if (!trimmedNew || trimmedNew === oldName) return false;
+    try {
+      await $fetch<{ success: boolean; oldName: string; newName: string }>(
+        `/api/folders/${encodeURIComponent(oldName)}`,
+        {
+          method: 'PUT',
+          body: { newName: trimmedNew },
+        }
+      );
+
+      notes.value.forEach((n) => {
+        if (n.folder === oldName) {
+          n.folder = trimmedNew;
+        } else if (n.folder && n.folder.startsWith(oldName + '/')) {
+          n.folder = trimmedNew + n.folder.slice(oldName.length);
+        }
+      });
+
+      const updatedExpanded: string[] = [];
+      for (const exp of expandedFolders.value) {
+        if (exp === oldName) {
+          updatedExpanded.push(trimmedNew);
+        } else if (exp.startsWith(oldName + '/')) {
+          updatedExpanded.push(trimmedNew + exp.slice(oldName.length));
+        } else {
+          updatedExpanded.push(exp);
+        }
+      }
+      expandedFolders.value = updatedExpanded;
+
+      if (selectedFolder.value === oldName) {
+        selectedFolder.value = trimmedNew;
+      } else if (selectedFolder.value && selectedFolder.value.startsWith(oldName + '/')) {
+        selectedFolder.value = trimmedNew + selectedFolder.value.slice(oldName.length);
+      }
+
+      await fetchFolders();
+      return true;
+    } catch (err) {
+      console.error(`Failed to rename folder "${oldName}" to "${newName}":`, err);
+      return false;
+    }
+  }
+
+  async function moveFolder(sourcePath: string, targetParentPath?: string): Promise<boolean> {
+    const trimmedSource = sourcePath?.trim();
+    if (!trimmedSource) return false;
+    const trimmedTarget = targetParentPath?.trim() || '';
+
+    if (trimmedTarget && (trimmedTarget === trimmedSource || trimmedTarget.startsWith(trimmedSource + '/'))) {
+      return false;
+    }
+
+    try {
+      const res = await $fetch<{ success: boolean; oldName: string; newName: string }>(
+        `/api/folders/${encodeURIComponent(trimmedSource)}`,
+        {
+          method: 'PUT',
+          body: { targetParent: trimmedTarget },
+        }
+      );
+
+      const newPath = res.newName;
+
+      notes.value.forEach((n) => {
+        if (n.folder === trimmedSource) {
+          n.folder = newPath;
+        } else if (n.folder && n.folder.startsWith(trimmedSource + '/')) {
+          n.folder = newPath + n.folder.slice(trimmedSource.length);
+        }
+      });
+
+      const updatedExpanded: string[] = [];
+      for (const exp of expandedFolders.value) {
+        if (exp === trimmedSource) {
+          updatedExpanded.push(newPath);
+        } else if (exp.startsWith(trimmedSource + '/')) {
+          updatedExpanded.push(newPath + exp.slice(trimmedSource.length));
+        } else {
+          updatedExpanded.push(exp);
+        }
+      }
+      if (newPath && !updatedExpanded.includes(newPath)) {
+        updatedExpanded.push(newPath);
+      }
+      if (trimmedTarget && !updatedExpanded.includes(trimmedTarget)) {
+        updatedExpanded.push(trimmedTarget);
+      }
+      expandedFolders.value = updatedExpanded;
+
+      if (selectedFolder.value === trimmedSource) {
+        selectedFolder.value = newPath;
+      } else if (selectedFolder.value && selectedFolder.value.startsWith(trimmedSource + '/')) {
+        selectedFolder.value = newPath + selectedFolder.value.slice(trimmedSource.length);
+      }
+
+      await fetchFolders();
+      return true;
+    } catch (err) {
+      console.error(`Failed to move folder "${sourcePath}" to "${targetParentPath}":`, err);
+      return false;
+    }
+  }
+
+  async function deleteFolder(name: string, deleteNotes = false): Promise<boolean> {
+    try {
+      await $fetch<{ success: boolean; name: string }>(
+        `/api/folders/${encodeURIComponent(name)}`,
+        {
+          method: 'DELETE',
+          query: { deleteNotes },
+        }
+      );
+
+      if (deleteNotes) {
+        notes.value = notes.value.filter(
+          (n) => !(n.folder === name || (n.folder && n.folder.startsWith(name + '/')))
+        );
+        if (activeNote.value && (activeNote.value.folder === name || activeNote.value.folder?.startsWith(name + '/'))) {
+          selectedNoteId.value = notes.value[0]?.id || null;
+        }
+      } else {
+        notes.value.forEach((n) => {
+          if (n.folder === name || (n.folder && n.folder.startsWith(name + '/'))) {
+            delete n.folder;
+          }
+        });
+      }
+
+      expandedFolders.value = expandedFolders.value.filter(
+        (f) => !(f === name || f.startsWith(name + '/'))
+      );
+      if (selectedFolder.value === name || (selectedFolder.value && selectedFolder.value.startsWith(name + '/'))) {
+        selectedFolder.value = null;
+      }
+      await fetchFolders();
+      return true;
+    } catch (err) {
+      console.error(`Failed to delete folder "${name}":`, err);
+      return false;
+    }
+  }
+
+  async function moveNoteToFolder(noteId: string, folderName?: string): Promise<void> {
+    const targetFolder = folderName?.trim() || '';
+    await updateNote(noteId, { folder: targetFolder });
+    if (targetFolder) {
+      const segs = targetFolder.split('/');
+      let cur = '';
+      for (const seg of segs) {
+        cur = cur ? `${cur}/${seg}` : seg;
+        if (!expandedFolders.value.includes(cur)) {
+          expandedFolders.value.push(cur);
+        }
+      }
+    }
+    await fetchFolders();
+  }
+
   async function fetchNotes(): Promise<void> {
     isLoading.value = true;
     try {
-      const data = await $fetch<Note[]>('/api/notes');
+      const [data] = await Promise.all([
+        $fetch<Note[]>('/api/notes'),
+        fetchFolders(),
+      ]);
       notes.value = data;
       if (!selectedNoteId.value && data.length > 0 && data[0]) {
         selectedNoteId.value = data[0].id;
@@ -118,10 +470,16 @@ export function useNotes() {
     flushAutoSave();
     isLoading.value = true;
     try {
+      let folderVal = dto?.folder;
+      if (folderVal === undefined && selectedFolder.value && selectedFolder.value !== '__root__') {
+        folderVal = selectedFolder.value;
+      }
+
       const payload: CreateNoteDTO = {
         title: dto?.title?.trim() || 'Untitled Note',
         content: dto?.content ?? '',
         tags: dto?.tags ?? [],
+        folder: folderVal ? folderVal.trim() : undefined,
       };
 
       const created = await $fetch<Note>('/api/notes', {
@@ -132,6 +490,11 @@ export function useNotes() {
       notes.value = [created, ...notes.value];
       selectedNoteId.value = created.id;
       saveStatus.value = 'saved';
+
+      if (created.folder && !expandedFolders.value.includes(created.folder)) {
+        expandedFolders.value.push(created.folder);
+      }
+      await fetchFolders();
 
       if (isMobile.value) {
         isSidebarOpen.value = false;
@@ -165,6 +528,14 @@ export function useNotes() {
         notes.value[index] = updated;
       }
       saveStatus.value = 'saved';
+
+      if (dto.folder !== undefined) {
+        if (updated.folder && !expandedFolders.value.includes(updated.folder)) {
+          expandedFolders.value.push(updated.folder);
+        }
+        await fetchFolders();
+      }
+
       return updated;
     } catch (err) {
       console.error(`Failed to update note ${id}:`, err);
@@ -192,6 +563,7 @@ export function useNotes() {
       if (selectedNoteId.value === id) {
         selectedNoteId.value = notes.value.length > 0 && notes.value[0] ? notes.value[0].id : null;
       }
+      await fetchFolders();
       return true;
     } catch (err) {
       console.error(`Failed to delete note ${id}:`, err);
@@ -207,11 +579,13 @@ export function useNotes() {
     const noteIndex = notes.value.findIndex((n) => n.id === currentId);
     if (noteIndex !== -1 && notes.value[noteIndex]) {
       const existing = notes.value[noteIndex]!;
+      const updatedFolder = dto.folder !== undefined ? (dto.folder.trim() || undefined) : existing.folder;
       const updatedNote: Note = {
         id: existing.id,
         title: dto.title !== undefined ? dto.title : existing.title,
         content: dto.content !== undefined ? dto.content : existing.content,
         tags: dto.tags !== undefined ? dto.tags : existing.tags,
+        folder: updatedFolder,
         createdAt: existing.createdAt,
         updatedAt: new Date().toISOString(),
       };
@@ -271,12 +645,19 @@ export function useNotes() {
   return {
     // State
     notes,
+    folders,
+    expandedFolders,
+    selectedFolder,
     selectedNoteId,
     activeNote,
     searchQuery,
     selectedTag,
     allTags,
     filteredNotes,
+    folderList,
+    folderTree,
+    notesByFolder,
+    rootNotes,
     saveStatus,
     isLoading,
     isSaving,
@@ -287,6 +668,16 @@ export function useNotes() {
 
     // Actions
     fetchNotes,
+    fetchFolders,
+    toggleFolder,
+    expandAllFolders,
+    collapseAllFolders,
+    createFolder,
+    createSubfolder,
+    renameFolder,
+    moveFolder,
+    deleteFolder,
+    moveNoteToFolder,
     selectNote,
     openNote,
     navigateBackToList,

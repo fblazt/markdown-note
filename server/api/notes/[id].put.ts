@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
     title: body.title,
     content: body.content,
     tags: body.tags,
+    folder: body.folder,
   });
 
   if (!updatedNote) {
