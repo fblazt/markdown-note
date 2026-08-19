@@ -1,0 +1,31 @@
+{
+  "name": "markdown-note-fs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxi typecheck",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vueuse/core": "^12.4.0",
+    "isomorphic-dompurify": "^2.20.0",
+    "lucide-vue-next": "^0.469.0",
+    "marked": "^15.0.0",
+    "nuxt": "^3.15.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^16.8.0",
+    "std-env": "^3.8.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "vue-tsc": "^2.2.0"
+  }
+}
