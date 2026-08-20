@@ -596,19 +596,19 @@ function formatDate(isoString: string): string {
 }
 
 .folder-hover-actions {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 0.15rem;
-  opacity: 0;
-  transition: opacity 0.15s ease;
 }
 
-.folder-header:hover .folder-hover-actions {
-  opacity: 1;
+.folder-header:hover .folder-hover-actions,
+.folder-header:focus-within .folder-hover-actions {
+  display: flex;
 }
 
 @media (hover: none) {
   .folder-hover-actions {
+    display: flex;
     opacity: 0.9;
   }
 }
@@ -893,6 +893,7 @@ function formatDate(isoString: string): string {
   }
 
   .folder-hover-actions {
+    display: flex;
     opacity: 0.9;
   }
 
