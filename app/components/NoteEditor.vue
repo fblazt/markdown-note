@@ -9,6 +9,7 @@
           placeholder="Note title..."
           class="title-input"
           @input="handleTitleInput"
+          @blur="flushAutoSave"
         />
 
         <div class="editor-header-actions">
@@ -316,6 +317,7 @@
         spellcheck="false"
         @input="handleContentInput"
         @keydown="handleKeyDown"
+        @blur="flushAutoSave"
       ></textarea>
     </div>
   </div>

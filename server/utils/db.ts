@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo } from '../../shared/types/note';
 
 function generateId(): string {
@@ -159,8 +161,48 @@ export default defineEventHandler(async (event) => {
   },
 ];
 
-let notesDb: Note[] = JSON.parse(JSON.stringify(SEED_NOTES));
-let foldersDb: Set<string> = new Set(INITIAL_FOLDERS);
+const STORAGE_DIR = path.resolve(process.cwd(), '.data', 'storage');
+const STORAGE_FILE = path.resolve(STORAGE_DIR, 'notes.json');
+
+let notesDb: Note[] = [];
+let foldersDb: Set<string> = new Set<string>();
+
+function saveToDisk(): void {
+  try {
+    fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    const payload = {
+      notes: notesDb,
+      folders: Array.from(foldersDb),
+    };
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(payload, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save notes database to disk:', err);
+  }
+}
+
+function initDb(): void {
+  try {
+    fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
+        notesDb = parsed.notes;
+        foldersDb = new Set(parsed.folders);
+        return;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to read notes database from disk, falling back to seed:', err);
+  }
+
+  notesDb = JSON.parse(JSON.stringify(SEED_NOTES));
+  foldersDb = new Set(INITIAL_FOLDERS);
+  saveToDisk();
+}
+
+// Initialize on module load
+initDb();
 
 /**
  * Normalizes folder path by trimming segments, collapsing multiple slashes,
@@ -227,6 +269,7 @@ export function createFolder(path: string): boolean {
     foldersDb.add(currentPath);
   }
 
+  saveToDisk();
   return true;
 }
 
@@ -301,6 +344,7 @@ export function renameFolder(oldPath: string, newPath: string): boolean {
     }
   }
 
+  saveToDisk();
   return true;
 }
 
@@ -344,6 +388,7 @@ export function deleteFolder(path: string, deleteNotes = false): boolean {
     }
   }
 
+  saveToDisk();
   return true;
 }
 
@@ -392,6 +437,7 @@ export function createNote(dto: CreateNoteDTO): Note {
     updatedAt: now,
   };
   notesDb.push(newNote);
+  saveToDisk();
   return { ...newNote };
 }
 
@@ -428,6 +474,7 @@ export function updateNote(id: string, dto: UpdateNoteDTO): Note | null {
   };
 
   notesDb[index] = updated;
+  saveToDisk();
   return { ...updated };
 }
 
@@ -437,11 +484,12 @@ export function deleteNote(id: string): boolean {
     return false;
   }
   notesDb.splice(index, 1);
+  saveToDisk();
   return true;
 }
 
 export function resetDb(): void {
   notesDb = JSON.parse(JSON.stringify(SEED_NOTES));
   foldersDb = new Set(INITIAL_FOLDERS);
+  saveToDisk();
 }
-

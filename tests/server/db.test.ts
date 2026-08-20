@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getAllNotes,
@@ -313,6 +315,48 @@ describe('Server Storage: db.ts', () => {
 
       const folders = getAllFolders();
       expect(folders.map((f) => f.name)).toEqual(['Code', 'Guides', 'Projects']);
+    });
+  });
+
+  describe('Filesystem Disk Persistence', () => {
+    const storageFile = path.resolve(process.cwd(), '.data', 'storage', 'notes.json');
+
+    it('persists data to .data/storage/notes.json upon mutations', () => {
+      expect(fs.existsSync(storageFile)).toBe(true);
+
+      const created = createNote({
+        title: 'Persisted Note',
+        content: 'Disk content test',
+        folder: 'DiskFolder',
+      });
+
+      const raw = fs.readFileSync(storageFile, 'utf-8');
+      const data = JSON.parse(raw);
+      expect(data).toHaveProperty('notes');
+      expect(data).toHaveProperty('folders');
+      expect(data.notes.some((n: any) => n.id === created.id && n.title === 'Persisted Note')).toBe(true);
+      expect(data.folders).toContain('DiskFolder');
+
+      updateNote(created.id, { title: 'Updated Persisted Note' });
+      const rawAfterUpdate = fs.readFileSync(storageFile, 'utf-8');
+      const dataAfterUpdate = JSON.parse(rawAfterUpdate);
+      const found = dataAfterUpdate.notes.find((n: any) => n.id === created.id);
+      expect(found.title).toBe('Updated Persisted Note');
+
+      deleteNote(created.id);
+      const rawAfterDelete = fs.readFileSync(storageFile, 'utf-8');
+      const dataAfterDelete = JSON.parse(rawAfterDelete);
+      expect(dataAfterDelete.notes.some((n: any) => n.id === created.id)).toBe(false);
+    });
+
+    it('persists folder creation and deletion to disk', () => {
+      createFolder('NewDiskFolder');
+      let data = JSON.parse(fs.readFileSync(storageFile, 'utf-8'));
+      expect(data.folders).toContain('NewDiskFolder');
+
+      deleteFolder('NewDiskFolder', false);
+      data = JSON.parse(fs.readFileSync(storageFile, 'utf-8'));
+      expect(data.folders).not.toContain('NewDiskFolder');
     });
   });
 });

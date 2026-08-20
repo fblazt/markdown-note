@@ -1,12 +1,36 @@
 import { ref, computed, watch } from 'vue';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo, FolderTreeNode, SaveStatus } from '../../shared/types/note';
 
+const getInitialExpandedFolders = (): string[] => {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('markdown-note-expanded-folders');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return ['Guides', 'Projects', 'Code'];
+};
+
+const getInitialSelectedNoteId = (): string | null => {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      return localStorage.getItem('markdown-note-active-note-id');
+    } catch {}
+  }
+  return null;
+};
+
 // Singleton refs to preserve state across component re-renders
 const notes = ref<Note[]>([]);
 const folders = ref<FolderInfo[]>([]);
-const expandedFolders = ref<string[]>(['Guides', 'Projects', 'Code']);
+const expandedFolders = ref<string[]>(getInitialExpandedFolders());
 const selectedFolder = ref<string | null>(null);
-const selectedNoteId = ref<string | null>(null);
+const selectedNoteId = ref<string | null>(getInitialSelectedNoteId());
 const searchQuery = ref('');
 const selectedTag = ref<string | null>(null);
 const saveStatus = ref<SaveStatus>('idle');
@@ -17,16 +41,110 @@ const isSidebarOpen = ref(true);
 
 const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
-// Global resize listener for mobile breakpoint if in browser
+// Watch expandedFolders to persist in localStorage
+watch(
+  expandedFolders,
+  (val) => {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('markdown-note-expanded-folders', JSON.stringify(val));
+      } catch {}
+    }
+  },
+  { deep: true }
+);
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveDTO: UpdateNoteDTO | null = null;
+
+// Global event listeners for browser environment
 if (typeof window !== 'undefined') {
   const updateMobile = () => {
     isMobile.value = window.innerWidth < 768;
   };
   window.addEventListener('resize', updateMobile);
+
+  const handleUnloadFlush = () => {
+    if (pendingSaveDTO && selectedNoteId.value) {
+      const currentId = selectedNoteId.value;
+      const toSave = { ...pendingSaveDTO };
+      if (typeof fetch === 'function') {
+        try {
+          fetch(`/api/notes/${currentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toSave),
+            keepalive: true,
+          }).catch(() => {});
+        } catch {}
+      }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      pendingSaveDTO = null;
+      updateNoteStandalone(currentId, toSave);
+    }
+  };
+
+  window.addEventListener('beforeunload', handleUnloadFlush);
+  window.addEventListener('pagehide', handleUnloadFlush);
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
+        if (pendingSaveDTO && selectedNoteId.value) {
+          const currentId = selectedNoteId.value;
+          const toSave = { ...pendingSaveDTO };
+          pendingSaveDTO = null;
+          updateNoteStandalone(currentId, toSave);
+        }
+      }
+    });
+  }
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSaveDTO: UpdateNoteDTO | null = null;
+async function updateNoteStandalone(id: string, dto: UpdateNoteDTO): Promise<Note | null> {
+  isSaving.value = true;
+  saveStatus.value = 'saving';
+
+  try {
+    const updated = await $fetch<Note>(`/api/notes/${id}`, {
+      method: 'PUT',
+      body: dto,
+    });
+
+    const index = notes.value.findIndex((n) => n.id === id);
+    if (index !== -1) {
+      notes.value[index] = updated;
+    }
+    saveStatus.value = 'saved';
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(`markdown-note-draft-${id}`);
+      } catch {}
+    }
+
+    if (dto.folder !== undefined) {
+      if (updated.folder && !expandedFolders.value.includes(updated.folder)) {
+        expandedFolders.value.push(updated.folder);
+      }
+    }
+
+    return updated;
+  } catch (err) {
+    console.error(`Failed to update note ${id}:`, err);
+    saveStatus.value = 'error';
+    return null;
+  } finally {
+    isSaving.value = false;
+  }
+}
 
 function buildFolderTree(folderList: FolderInfo[], notesList: Note[]): FolderTreeNode[] {
   const allPaths = new Set<string>();
@@ -383,11 +501,32 @@ export function useNotes() {
       );
 
       if (deleteNotes) {
+        const deletedNoteIds = notes.value
+          .filter((n) => n.folder === name || (n.folder && n.folder.startsWith(name + '/')))
+          .map((n) => n.id);
+        if (typeof localStorage !== 'undefined') {
+          for (const dId of deletedNoteIds) {
+            try {
+              localStorage.removeItem(`markdown-note-draft-${dId}`);
+            } catch {}
+          }
+        }
+
         notes.value = notes.value.filter(
           (n) => !(n.folder === name || (n.folder && n.folder.startsWith(name + '/')))
         );
         if (activeNote.value && (activeNote.value.folder === name || activeNote.value.folder?.startsWith(name + '/'))) {
-          selectedNoteId.value = notes.value[0]?.id || null;
+          const nextId = notes.value[0]?.id || null;
+          selectedNoteId.value = nextId;
+          if (typeof localStorage !== 'undefined') {
+            try {
+              if (nextId) {
+                localStorage.setItem('markdown-note-active-note-id', nextId);
+              } else {
+                localStorage.removeItem('markdown-note-active-note-id');
+              }
+            } catch {}
+          }
         }
       } else {
         notes.value.forEach((n) => {
@@ -434,9 +573,37 @@ export function useNotes() {
         $fetch<Note[]>('/api/notes'),
         fetchFolders(),
       ]);
+
+      if (typeof localStorage !== 'undefined') {
+        for (const note of data) {
+          try {
+            const draft = localStorage.getItem(`markdown-note-draft-${note.id}`);
+            if (draft !== null) {
+              note.content = draft;
+            }
+          } catch {}
+        }
+      }
+
       notes.value = data;
-      if (!selectedNoteId.value && data.length > 0 && data[0]) {
-        selectedNoteId.value = data[0].id;
+
+      let storedId: string | null = null;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          storedId = localStorage.getItem('markdown-note-active-note-id');
+        } catch {}
+      }
+
+      if (storedId && data.some((n) => n.id === storedId)) {
+        selectedNoteId.value = storedId;
+      } else if (!selectedNoteId.value || !data.some((n) => n.id === selectedNoteId.value)) {
+        const fallbackId = data.length > 0 && data[0] ? data[0].id : null;
+        selectedNoteId.value = fallbackId;
+        if (fallbackId && typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem('markdown-note-active-note-id', fallbackId);
+          } catch {}
+        }
       }
     } catch (err) {
       console.error('Failed to fetch notes:', err);
@@ -450,6 +617,15 @@ export function useNotes() {
     flushAutoSave();
     selectedNoteId.value = id;
     saveStatus.value = 'idle';
+    if (typeof localStorage !== 'undefined') {
+      try {
+        if (id) {
+          localStorage.setItem('markdown-note-active-note-id', id);
+        } else {
+          localStorage.removeItem('markdown-note-active-note-id');
+        }
+      } catch {}
+    }
   }
 
   function openNote(id: string): void {
@@ -489,6 +665,11 @@ export function useNotes() {
 
       notes.value = [created, ...notes.value];
       selectedNoteId.value = created.id;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('markdown-note-active-note-id', created.id);
+        } catch {}
+      }
       saveStatus.value = 'saved';
 
       if (created.folder && !expandedFolders.value.includes(created.folder)) {
@@ -529,6 +710,12 @@ export function useNotes() {
       }
       saveStatus.value = 'saved';
 
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem(`markdown-note-draft-${id}`);
+        } catch {}
+      }
+
       if (dto.folder !== undefined) {
         if (updated.folder && !expandedFolders.value.includes(updated.folder)) {
           expandedFolders.value.push(updated.folder);
@@ -560,8 +747,24 @@ export function useNotes() {
 
       notes.value = notes.value.filter((n) => n.id !== id);
 
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.removeItem(`markdown-note-draft-${id}`);
+        } catch {}
+      }
+
       if (selectedNoteId.value === id) {
-        selectedNoteId.value = notes.value.length > 0 && notes.value[0] ? notes.value[0].id : null;
+        const nextId = notes.value.length > 0 && notes.value[0] ? notes.value[0].id : null;
+        selectedNoteId.value = nextId;
+        if (typeof localStorage !== 'undefined') {
+          try {
+            if (nextId) {
+              localStorage.setItem('markdown-note-active-note-id', nextId);
+            } else {
+              localStorage.removeItem('markdown-note-active-note-id');
+            }
+          } catch {}
+        }
       }
       await fetchFolders();
       return true;
@@ -590,6 +793,12 @@ export function useNotes() {
         updatedAt: new Date().toISOString(),
       };
       notes.value[noteIndex] = updatedNote;
+
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(`markdown-note-draft-${currentId}`, updatedNote.content);
+        } catch {}
+      }
     }
 
     saveStatus.value = 'unsaved';

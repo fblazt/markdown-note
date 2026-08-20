@@ -40,9 +40,25 @@ const MOCK_FOLDERS: FolderInfo[] = [
 
 describe('Composable: useNotes', () => {
   let composable: ReturnType<typeof useNotes>;
+  let localStorageStore: Record<string, string> = {};
 
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorageStore = {};
+    const mockLocalStorage = {
+      getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        localStorageStore[key] = String(value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete localStorageStore[key];
+      }),
+      clear: vi.fn(() => {
+        localStorageStore = {};
+      }),
+    };
+    vi.stubGlobal('localStorage', mockLocalStorage);
+
     composable = useNotes();
     composable.notes.value = JSON.parse(JSON.stringify(MOCK_NOTES));
     composable.folders.value = JSON.parse(JSON.stringify(MOCK_FOLDERS));
@@ -169,6 +185,7 @@ describe('Composable: useNotes', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -555,6 +572,70 @@ describe('Composable: useNotes', () => {
 
       composable.setViewMode('preview');
       expect(composable.viewMode.value).toBe('preview');
+    });
+  });
+
+  describe('Persistence and Draft Backup', () => {
+    it('persists selectedNoteId to localStorage on selectNote and createNote', async () => {
+      composable.selectNote('note-2');
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('note-2');
+
+      await composable.createNote({ title: 'Brand New Note' });
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('new-note-id');
+    });
+
+    it('restores selectedNoteId from localStorage during fetchNotes if valid', async () => {
+      localStorage.setItem('markdown-note-active-note-id', 'note-2');
+      composable.selectedNoteId.value = null;
+
+      await composable.fetchNotes();
+      expect(composable.selectedNoteId.value).toBe('note-2');
+    });
+
+    it('falls back to first note if stored selectedNoteId is not in notes list during fetchNotes', async () => {
+      localStorage.setItem('markdown-note-active-note-id', 'non-existent-note-id');
+      composable.selectedNoteId.value = null;
+
+      await composable.fetchNotes();
+      expect(composable.selectedNoteId.value).toBe('note-1');
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('note-1');
+    });
+
+    it('saves draft to localStorage on queueAutoSave and clears it upon successful save', async () => {
+      composable.selectNote('note-1');
+      composable.queueAutoSave({ content: 'Work in progress draft content' }, 300);
+
+      expect(localStorage.getItem('markdown-note-draft-note-1')).toBe('Work in progress draft content');
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(localStorage.getItem('markdown-note-draft-note-1')).toBeNull();
+    });
+
+    it('removes draft from localStorage when note is deleted', async () => {
+      localStorage.setItem('markdown-note-draft-note-1', 'Some lingering draft');
+      await composable.deleteNote('note-1');
+
+      expect(localStorage.getItem('markdown-note-draft-note-1')).toBeNull();
+    });
+
+    it('restores draft content when fetchNotes loads notes with existing drafts', async () => {
+      localStorage.setItem('markdown-note-draft-note-3', 'Restored draft content from browser storage');
+
+      await composable.fetchNotes();
+
+      const note3 = composable.notes.value.find((n) => n.id === 'note-3');
+      expect(note3?.content).toBe('Restored draft content from browser storage');
+    });
+
+    it('persists expandedFolders to localStorage when modified', async () => {
+      composable.toggleFolder('Guides');
+      await vi.advanceTimersByTimeAsync(10);
+
+      const stored = localStorage.getItem('markdown-note-expanded-folders');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed).not.toContain('Guides');
     });
   });
 });
