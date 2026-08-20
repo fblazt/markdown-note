@@ -2,17 +2,28 @@
   <aside class="note-sidebar" :class="{ 'sidebar-closed': !isSidebarOpen }">
     <!-- Sidebar Header -->
     <div class="sidebar-header">
-      <div class="sidebar-brand">
-        <FileText class="icon-brand" :size="20" />
-        <h2>Markdown Notes</h2>
+      <div class="sidebar-title-group">
+        <FileText class="icon-brand" :size="16" />
+        <h2>Notes</h2>
         <span class="notes-count-badge">{{ notes.length }}</span>
       </div>
 
       <div class="sidebar-header-actions">
+        <!-- New Note Button -->
+        <button
+          type="button"
+          class="btn-icon btn-sidebar-action btn-sidebar-new-note"
+          title="New Note (Ctrl+N)"
+          aria-label="New Note"
+          @click="handleCreateNote()"
+        >
+          <Plus :size="15" />
+        </button>
+
         <!-- New Folder Button -->
         <button
           type="button"
-          class="btn-icon btn-new-folder"
+          class="btn-icon btn-sidebar-action btn-new-folder"
           title="Create New Folder"
           aria-label="Create New Folder"
           @click="startCreateFolder"
@@ -24,7 +35,7 @@
         <div ref="exportMenuRef" class="export-all-wrapper">
           <button
             type="button"
-            class="btn-icon btn-export-all"
+            class="btn-icon btn-sidebar-action btn-export-all"
             :class="{ active: isExportOpen }"
             title="Export all notes"
             aria-label="Export all notes"
@@ -75,15 +86,6 @@
             </div>
           </transition>
         </div>
-
-        <button
-          class="btn btn-primary btn-new-note"
-          title="Create New Note (Ctrl+N)"
-          @click="handleCreateNote()"
-        >
-          <Plus :size="16" />
-          <span>New Note</span>
-        </button>
       </div>
     </div>
 
@@ -767,7 +769,7 @@ function formatDate(isoString: string): string {
 }
 
 .sidebar-header {
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -775,17 +777,18 @@ function formatDate(isoString: string): string {
   gap: 0.5rem;
 }
 
-.sidebar-brand {
+.sidebar-title-group {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
 }
 
-.sidebar-brand h2 {
-  font-size: 0.9rem;
+.sidebar-title-group h2 {
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -799,8 +802,8 @@ function formatDate(isoString: string): string {
 .notes-count-badge {
   background-color: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 0.68rem;
-  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  padding: 0.05rem 0.4rem;
   border-radius: var(--radius-full);
   font-weight: 600;
   border: 1px solid var(--border-subtle);
@@ -814,12 +817,13 @@ function formatDate(isoString: string): string {
   flex-shrink: 0;
 }
 
-.btn-new-folder,
-.btn-export-all {
+.btn-sidebar-action {
   border: 1px solid var(--border-subtle);
   background-color: var(--bg-surface);
   color: var(--text-secondary);
-  padding: 0.35rem;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -828,12 +832,16 @@ function formatDate(isoString: string): string {
   transition: all 0.12s ease;
 }
 
-.btn-new-folder:hover,
-.btn-export-all:hover,
-.btn-export-all.active {
+.btn-sidebar-action:hover,
+.btn-sidebar-action.active {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
   border-color: var(--border-focus);
+}
+
+.btn-sidebar-new-note:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
 }
 
 .export-all-wrapper {
@@ -924,14 +932,6 @@ function formatDate(isoString: string): string {
 .dropdown-fade-leave-to {
   opacity: 0;
   transform: translateY(-4px);
-}
-
-.btn-new-note {
-  font-size: 0.78rem;
-  padding: 0.35rem 0.65rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 /* Inline Create/Rename Folder Form */

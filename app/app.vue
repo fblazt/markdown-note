@@ -31,7 +31,6 @@
         <div class="brand">
           <FileCode :size="20" class="brand-icon" />
           <span class="brand-name">Markdown Notes</span>
-          <span class="brand-version">v1.0</span>
         </div>
       </div>
 
@@ -106,9 +105,6 @@
       </div>
 
       <div class="status-right">
-        <span class="status-tip">
-          <kbd>Ctrl+S</kbd> Save • <kbd>Ctrl+B</kbd> Bold • <kbd>Tab</kbd> Indent
-        </span>
         <span class="status-notes-total">{{ notes.length }} notes</span>
       </div>
     </footer>
@@ -242,16 +238,6 @@ onUnmounted(() => {
   letter-spacing: -0.01em;
 }
 
-.brand-version {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.35rem;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-}
-
 .view-mode-controls {
   display: flex;
   align-items: center;
@@ -313,21 +299,6 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-.status-tip {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-}
-
-.status-tip kbd {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 3px;
-  padding: 0.05rem 0.3rem;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-}
-
 .status-notes-total {
   font-weight: 500;
   white-space: nowrap;
@@ -337,14 +308,8 @@ onUnmounted(() => {
   .btn-label {
     display: none;
   }
-  .status-tip {
-    display: none;
-  }
   .split-view-btn {
     display: none !important;
-  }
-  .brand-version {
-    display: none;
   }
   .brand-name {
     font-size: 0.9rem;

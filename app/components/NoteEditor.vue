@@ -320,6 +320,25 @@
         @blur="flushAutoSave"
       ></textarea>
     </div>
+
+    <!-- Editor Footer / Status Bar -->
+    <div class="editor-footer">
+      <div class="editor-footer-left">
+        <span class="editor-shortcut"><kbd>Ctrl+S</kbd> Save</span>
+        <span class="footer-separator">•</span>
+        <span class="editor-shortcut"><kbd>Ctrl+B</kbd> Bold</span>
+        <span class="footer-separator">•</span>
+        <span class="editor-shortcut"><kbd>Ctrl+I</kbd> Italic</span>
+        <span class="footer-separator">•</span>
+        <span class="editor-shortcut"><kbd>Tab</kbd> Indent</span>
+      </div>
+
+      <div class="editor-footer-right">
+        <span class="editor-stat">{{ wordCount }} {{ wordCount === 1 ? 'word' : 'words' }}</span>
+        <span class="footer-separator">•</span>
+        <span class="editor-stat">{{ charCount }} {{ charCount === 1 ? 'char' : 'chars' }}</span>
+      </div>
+    </div>
   </div>
 
   <div v-else class="editor-empty-state">
@@ -403,6 +422,17 @@ function flattenFolderTree(nodes: FolderTreeNode[]): FlattenedFolderOption[] {
 }
 
 const flattenedFolders = computed(() => flattenFolderTree(folderTree.value));
+
+const wordCount = computed(() => {
+  if (!activeNote.value || !activeNote.value.content) return 0;
+  const words = activeNote.value.content.trim().split(/\s+/).filter(Boolean);
+  return words.length;
+});
+
+const charCount = computed(() => {
+  if (!activeNote.value || !activeNote.value.content) return 0;
+  return activeNote.value.content.length;
+});
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const newTagInput = ref('');
@@ -1063,6 +1093,55 @@ function insertFormat(type: string) {
   font-size: 0.85rem;
 }
 
+/* Editor Footer */
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 1.25rem;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.editor-footer-left,
+.editor-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.editor-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-muted);
+}
+
+.editor-shortcut kbd {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.footer-separator {
+  color: var(--border-subtle);
+  font-size: 0.65rem;
+  user-select: none;
+}
+
+.editor-stat {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 767px) {
   .note-editor {
     border-right: none;
@@ -1101,6 +1180,19 @@ function insertFormat(type: string) {
   .markdown-textarea {
     font-size: 16px !important;
     line-height: 1.6;
+  }
+
+  .editor-footer {
+    padding: 0.4rem 1rem;
+    justify-content: flex-end;
+  }
+
+  .editor-footer-left {
+    display: none;
+  }
+
+  .editor-shortcut {
+    display: none;
   }
 }
 </style>
