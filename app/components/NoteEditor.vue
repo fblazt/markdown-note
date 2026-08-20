@@ -695,6 +695,7 @@ function insertFormat(type: string) {
   flex: 1;
   min-width: 0;
   border-right: 1px solid var(--border-color);
+  transition: border-color 0.25s ease;
 }
 
 .editor-header {
