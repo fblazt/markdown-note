@@ -1,49 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotes } from '../../app/composables/useNotes';
-import type { Note, FolderInfo } from '../../shared/types/note';
-
-const MOCK_NOTES: Note[] = [
-  {
-    id: 'note-1',
-    title: 'Vue 3 Guide',
-    content: 'Learn Vue 3 composition API',
-    tags: ['vue', 'frontend'],
-    folder: 'Guides',
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'note-2',
-    title: 'Nitro Backend',
-    content: 'Fullstack server engine with Nitro',
-    tags: ['nitro', 'backend'],
-    folder: 'Projects',
-    createdAt: '2025-01-02T00:00:00.000Z',
-    updatedAt: '2025-01-02T00:00:00.000Z',
-  },
-  {
-    id: 'note-3',
-    title: 'Markdown Tips',
-    content: 'Writing notes efficiently with markdown syntax',
-    tags: ['markdown'],
-    // Uncategorized / Root
-    createdAt: '2025-01-03T00:00:00.000Z',
-    updatedAt: '2025-01-03T00:00:00.000Z',
-  },
-];
-
-const MOCK_FOLDERS: FolderInfo[] = [
-  { name: 'Code', noteCount: 0 },
-  { name: 'Guides', noteCount: 1 },
-  { name: 'Projects', noteCount: 1 },
-];
+import { resetDb, getNoteById, getAllFolders, getAllNotes } from '../../app/utils/db';
 
 describe('Composable: useNotes', () => {
   let composable: ReturnType<typeof useNotes>;
   let localStorageStore: Record<string, string> = {};
 
-  beforeEach(() => {
-    vi.useFakeTimers();
+  beforeEach(async () => {
+    vi.useRealTimers();
     localStorageStore = {};
     const mockLocalStorage = {
       getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
@@ -59,128 +23,15 @@ describe('Composable: useNotes', () => {
     };
     vi.stubGlobal('localStorage', mockLocalStorage);
 
+    await resetDb();
     composable = useNotes();
-    composable.notes.value = JSON.parse(JSON.stringify(MOCK_NOTES));
-    composable.folders.value = JSON.parse(JSON.stringify(MOCK_FOLDERS));
+    await composable.fetchNotes();
     composable.expandedFolders.value = ['Guides', 'Projects', 'Code'];
     composable.selectedFolder.value = null;
-    composable.selectedNoteId.value = 'note-1';
+    composable.selectedNoteId.value = 'seed-welcome-guide';
     composable.searchQuery.value = '';
     composable.selectedTag.value = null;
     composable.saveStatus.value = 'idle';
-
-    let mockFoldersList = JSON.parse(JSON.stringify(MOCK_FOLDERS));
-
-    // Mock global $fetch
-    globalThis.$fetch = vi.fn(async (url: string, opts?: any) => {
-      if (url === '/api/folders' && (!opts || opts?.method === 'GET')) {
-        const all = new Set<string>(mockFoldersList.map((f: any) => f.name));
-        for (const f of composable.folders.value) {
-          all.add(f.name);
-        }
-        for (const n of composable.notes.value) {
-          if (n.folder) {
-            const segs = n.folder.split('/');
-            let cur = '';
-            for (const s of segs) {
-              cur = cur ? `${cur}/${s}` : s;
-              all.add(cur);
-            }
-          }
-        }
-        return Array.from(all).map((name) => ({
-          name,
-          noteCount: composable.notes.value.filter((n) => n.folder === name).length,
-        }));
-      }
-      if (url === '/api/folders' && opts?.method === 'POST') {
-        const newFolder = { name: opts.body.name, noteCount: 0 };
-        mockFoldersList.push(newFolder);
-        return {
-          success: true,
-          name: opts.body.name,
-        };
-      }
-      if (url.startsWith('/api/folders/') && opts?.method === 'PUT') {
-        const oldName = decodeURIComponent(url.split('/').pop() || '');
-        let newName = opts.body.newName;
-        if (opts.body.targetParent !== undefined) {
-          const base = oldName.split('/').pop();
-          newName = opts.body.targetParent ? `${opts.body.targetParent}/${base}` : base;
-        }
-        for (const f of mockFoldersList) {
-          if (f.name === oldName) {
-            f.name = newName;
-          } else if (f.name.startsWith(oldName + '/')) {
-            f.name = newName + f.name.slice(oldName.length);
-          }
-        }
-        const segs = newName.split('/');
-        let cur = '';
-        for (const s of segs) {
-          cur = cur ? `${cur}/${s}` : s;
-          if (!mockFoldersList.some((f: any) => f.name === cur)) {
-            mockFoldersList.push({ name: cur, noteCount: 0 });
-          }
-        }
-        return {
-          success: true,
-          oldName,
-          newName,
-        };
-      }
-      if (url.startsWith('/api/folders/') && opts?.method === 'DELETE') {
-        const nameToDelete = decodeURIComponent(url.split('?')[0]?.split('/').pop() || '');
-        mockFoldersList = mockFoldersList.filter((f: any) => f.name !== nameToDelete);
-        return {
-          success: true,
-          name: nameToDelete,
-        };
-      }
-      if (url === '/api/notes' && opts?.method === 'POST') {
-        if (opts.body?.folder) {
-          const segs = opts.body.folder.split('/');
-          let cur = '';
-          for (const s of segs) {
-            cur = cur ? `${cur}/${s}` : s;
-            if (!mockFoldersList.some((f: any) => f.name === cur)) {
-              mockFoldersList.push({ name: cur, noteCount: 0 });
-            }
-          }
-        }
-        return {
-          id: 'new-note-id',
-          title: opts.body.title,
-          content: opts.body.content,
-          tags: opts.body.tags || [],
-          folder: opts.body.folder,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      if (url.startsWith('/api/notes/') && opts?.method === 'PUT') {
-        const id = url.split('/').pop();
-        if (opts.body?.folder) {
-          const segs = opts.body.folder.split('/');
-          let cur = '';
-          for (const s of segs) {
-            cur = cur ? `${cur}/${s}` : s;
-            if (!mockFoldersList.some((f: any) => f.name === cur)) {
-              mockFoldersList.push({ name: cur, noteCount: 0 });
-            }
-          }
-        }
-        return {
-          id,
-          ...opts.body,
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      if (url.startsWith('/api/notes/') && opts?.method === 'DELETE') {
-        return { success: true };
-      }
-      return MOCK_NOTES;
-    }) as any;
   });
 
   afterEach(() => {
@@ -190,12 +41,12 @@ describe('Composable: useNotes', () => {
   });
 
   it('computes activeNote based on selectedNoteId', () => {
-    expect(composable.activeNote.value?.id).toBe('note-1');
-    expect(composable.activeNote.value?.title).toBe('Vue 3 Guide');
+    expect(composable.activeNote.value?.id).toBe('seed-welcome-guide');
+    expect(composable.activeNote.value?.title).toContain('Welcome');
 
-    composable.selectNote('note-2');
-    expect(composable.activeNote.value?.id).toBe('note-2');
-    expect(composable.activeNote.value?.title).toBe('Nitro Backend');
+    composable.selectNote('seed-project-roadmap');
+    expect(composable.activeNote.value?.id).toBe('seed-project-roadmap');
+    expect(composable.activeNote.value?.title).toContain('Project Architecture');
 
     composable.selectNote('non-existent');
     expect(composable.activeNote.value).toBeNull();
@@ -203,38 +54,38 @@ describe('Composable: useNotes', () => {
 
   it('computes allTags sorted without duplicates', () => {
     const tags = composable.allTags.value;
-    expect(tags).toEqual(['backend', 'frontend', 'markdown', 'nitro', 'vue']);
+    expect(tags).toEqual(['architecture', 'code', 'guide', 'markdown', 'nuxt', 'roadmap', 'snippets', 'typescript', 'welcome']);
   });
 
   it('filters notes by search query across title, content, tags, and folder', () => {
-    composable.searchQuery.value = 'backend';
+    composable.searchQuery.value = 'architecture';
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-2');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-project-roadmap');
 
-    composable.searchQuery.value = 'composition';
+    composable.searchQuery.value = 'cheat sheet';
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-1');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-welcome-guide');
 
-    composable.searchQuery.value = 'syntax';
+    composable.searchQuery.value = 'snippets';
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-3');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-code-snippets');
 
     composable.searchQuery.value = 'guides';
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-1');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-welcome-guide');
 
     composable.searchQuery.value = 'non-matching-query';
     expect(composable.filteredNotes.value.length).toBe(0);
   });
 
   it('filters notes by tag selection', () => {
-    composable.toggleTagFilter('frontend');
-    expect(composable.selectedTag.value).toBe('frontend');
+    composable.toggleTagFilter('guide');
+    expect(composable.selectedTag.value).toBe('guide');
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-1');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-welcome-guide');
 
     // Toggling the same tag clears the filter
-    composable.toggleTagFilter('frontend');
+    composable.toggleTagFilter('guide');
     expect(composable.selectedTag.value).toBeNull();
     expect(composable.filteredNotes.value.length).toBe(3);
   });
@@ -242,20 +93,18 @@ describe('Composable: useNotes', () => {
   it('computes notesByFolder and rootNotes correctly', () => {
     expect(composable.notesByFolder.value['Guides']?.length).toBe(1);
     expect(composable.notesByFolder.value['Projects']?.length).toBe(1);
-    expect(composable.notesByFolder.value['Code']?.length).toBe(0);
+    expect(composable.notesByFolder.value['Code']?.length).toBe(1);
 
-    expect(composable.rootNotes.value.length).toBe(1);
-    expect(composable.rootNotes.value[0]?.id).toBe('note-3');
+    expect(composable.rootNotes.value.length).toBe(0);
   });
 
   it('filters notes by selectedFolder', () => {
     composable.selectedFolder.value = 'Guides';
     expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-1');
+    expect(composable.filteredNotes.value[0]?.id).toBe('seed-welcome-guide');
 
     composable.selectedFolder.value = '__root__';
-    expect(composable.filteredNotes.value.length).toBe(1);
-    expect(composable.filteredNotes.value[0]?.id).toBe('note-3');
+    expect(composable.filteredNotes.value.length).toBe(0);
 
     composable.selectedFolder.value = null;
     expect(composable.filteredNotes.value.length).toBe(3);
@@ -275,34 +124,15 @@ describe('Composable: useNotes', () => {
     expect(composable.expandedFolders.value).toEqual(['Code', 'Guides', 'Projects']);
   });
 
-  it('computes folderTree hierarchical structure correctly with depth and children', () => {
-    composable.folders.value = [
-      { name: 'Code', noteCount: 0 },
-      { name: 'Guides', noteCount: 1 },
-      { name: 'Projects', noteCount: 0 },
-      { name: 'Projects/Frontend', noteCount: 0 },
-      { name: 'Projects/Frontend/Vue', noteCount: 1 },
-    ];
-    composable.notes.value = [
-      {
-        id: 'note-1',
-        title: 'Vue 3 Guide',
-        content: 'Content',
-        tags: [],
-        folder: 'Guides',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      },
-      {
-        id: 'note-2',
-        title: 'Vue Component',
-        content: 'Content',
-        tags: [],
-        folder: 'Projects/Frontend/Vue',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      },
-    ];
+  it('computes folderTree hierarchical structure correctly with depth and children', async () => {
+    await composable.createFolder('Projects/Frontend/Vue');
+    await composable.createNote({
+      title: 'Vue Component',
+      content: 'Content',
+      tags: [],
+      folder: 'Projects/Frontend/Vue',
+    });
+    await composable.fetchNotes();
 
     const tree = composable.folderTree.value;
     expect(tree.length).toBe(3); // Code, Guides, Projects
@@ -329,62 +159,43 @@ describe('Composable: useNotes', () => {
   it('creates subfolder and auto-expands parent and child paths', async () => {
     const success = await composable.createSubfolder('Projects', 'Backend');
     expect(success).toBe(true);
-    expect(globalThis.$fetch).toHaveBeenCalledWith('/api/folders', {
-      method: 'POST',
-      body: { name: 'Projects/Backend' },
-    });
+    expect(composable.folders.value.some((f) => f.name === 'Projects/Backend')).toBe(true);
     expect(composable.expandedFolders.value.includes('Projects')).toBe(true);
     expect(composable.expandedFolders.value.includes('Projects/Backend')).toBe(true);
   });
 
   it('moves folder under target parent via moveFolder', async () => {
-    composable.folders.value = [
-      { name: 'Projects', noteCount: 0 },
-      { name: 'Projects/Frontend', noteCount: 1 },
-      { name: 'Archive', noteCount: 0 },
-    ];
-    composable.notes.value = [
-      {
-        id: 'note-1',
-        title: 'Frontend note',
-        content: 'Content',
-        tags: [],
-        folder: 'Projects/Frontend',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      },
-    ];
+    await composable.createFolder('Projects/Frontend');
+    await composable.createFolder('Archive');
+    await composable.createNote({
+      title: 'Frontend note',
+      content: 'Content',
+      tags: [],
+      folder: 'Projects/Frontend',
+    });
+    await composable.fetchNotes();
+
     composable.expandedFolders.value = ['Projects', 'Projects/Frontend'];
 
     const success = await composable.moveFolder('Projects/Frontend', 'Archive');
     expect(success).toBe(true);
-    expect(globalThis.$fetch).toHaveBeenCalledWith(
-      `/api/folders/${encodeURIComponent('Projects/Frontend')}`,
-      {
-        method: 'PUT',
-        body: { targetParent: 'Archive' },
-      }
-    );
-    expect(composable.notes.value[0]?.folder).toBe('Archive/Frontend');
+    expect(composable.notes.value.find((n) => n.title === 'Frontend note')?.folder).toBe('Archive/Frontend');
     expect(composable.expandedFolders.value.includes('Archive/Frontend')).toBe(true);
   });
 
   it('moveFolder un-nests subfolder to top-level root when targetParent is empty', async () => {
-    composable.notes.value = [
-      {
-        id: 'note-1',
-        title: 'Frontend note',
-        content: 'Content',
-        tags: [],
-        folder: 'Projects/Frontend',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      },
-    ];
+    await composable.createFolder('Projects/Frontend');
+    await composable.createNote({
+      title: 'Frontend note',
+      content: 'Content',
+      tags: [],
+      folder: 'Projects/Frontend',
+    });
+    await composable.fetchNotes();
 
     const success = await composable.moveFolder('Projects/Frontend', '');
     expect(success).toBe(true);
-    expect(composable.notes.value[0]?.folder).toBe('Frontend');
+    expect(composable.notes.value.find((n) => n.title === 'Frontend note')?.folder).toBe('Frontend');
   });
 
   it('moveFolder rejects moving folder into itself or its own descendant', async () => {
@@ -396,14 +207,8 @@ describe('Composable: useNotes', () => {
   });
 
   it('moves note to folder and expands all ancestor folders', async () => {
-    await composable.moveNoteToFolder('note-3', 'Projects/Frontend/Components');
-    expect(globalThis.$fetch).toHaveBeenCalledWith(
-      '/api/notes/note-3',
-      expect.objectContaining({
-        method: 'PUT',
-        body: { folder: 'Projects/Frontend/Components' },
-      })
-    );
+    await composable.moveNoteToFolder('seed-code-snippets', 'Projects/Frontend/Components');
+    expect(composable.notes.value.find((n) => n.id === 'seed-code-snippets')?.folder).toBe('Projects/Frontend/Components');
     expect(composable.expandedFolders.value.includes('Projects')).toBe(true);
     expect(composable.expandedFolders.value.includes('Projects/Frontend')).toBe(true);
     expect(composable.expandedFolders.value.includes('Projects/Frontend/Components')).toBe(true);
@@ -412,36 +217,22 @@ describe('Composable: useNotes', () => {
   it('creates folder and auto-expands it', async () => {
     const success = await composable.createFolder('Architecture');
     expect(success).toBe(true);
-    expect(globalThis.$fetch).toHaveBeenCalledWith('/api/folders', {
-      method: 'POST',
-      body: { name: 'Architecture' },
-    });
+    expect(composable.folders.value.some((f) => f.name === 'Architecture')).toBe(true);
     expect(composable.expandedFolders.value.includes('Architecture')).toBe(true);
   });
 
   it('renames folder and updates local notes and expandedFolders', async () => {
     const success = await composable.renameFolder('Guides', 'Docs');
     expect(success).toBe(true);
-    expect(composable.notes.value.find((n) => n.id === 'note-1')?.folder).toBe('Docs');
+    expect(composable.notes.value.find((n) => n.id === 'seed-welcome-guide')?.folder).toBe('Docs');
     expect(composable.expandedFolders.value.includes('Docs')).toBe(true);
   });
 
   it('deletes folder and updates local state', async () => {
     const success = await composable.deleteFolder('Guides', false);
     expect(success).toBe(true);
-    expect(composable.notes.value.find((n) => n.id === 'note-1')?.folder).toBeUndefined();
+    expect(composable.notes.value.find((n) => n.id === 'seed-welcome-guide')?.folder).toBeUndefined();
     expect(composable.expandedFolders.value.includes('Guides')).toBe(false);
-  });
-
-  it('moves note to folder via moveNoteToFolder', async () => {
-    await composable.moveNoteToFolder('note-3', 'Code');
-    expect(globalThis.$fetch).toHaveBeenCalledWith(
-      '/api/notes/note-3',
-      expect.objectContaining({
-        method: 'PUT',
-        body: { folder: 'Code' },
-      })
-    );
   });
 
   it('creates note and updates state with folder assignment', async () => {
@@ -455,18 +246,19 @@ describe('Composable: useNotes', () => {
     expect(created?.title).toBe('Created in Guides');
     expect(created?.folder).toBe('Guides');
     expect(composable.notes.value[0]?.title).toBe('Created in Guides');
-    expect(composable.selectedNoteId.value).toBe('new-note-id');
+    expect(composable.selectedNoteId.value).toBe(created?.id);
     expect(composable.saveStatus.value).toBe('saved');
   });
 
   it('deletes note and selects remaining note', async () => {
-    await composable.deleteNote('note-1');
-    expect(composable.notes.value.some((n) => n.id === 'note-1')).toBe(false);
-    expect(composable.selectedNoteId.value).toBe('note-2');
+    await composable.deleteNote('seed-welcome-guide');
+    expect(composable.notes.value.some((n) => n.id === 'seed-welcome-guide')).toBe(false);
+    expect(composable.selectedNoteId.value).not.toBe('seed-welcome-guide');
   });
 
   it('handles debounced auto-save queue with folder updates', async () => {
-    composable.selectNote('note-1');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    composable.selectNote('seed-welcome-guide');
     composable.queueAutoSave({ content: 'Updated content live', folder: 'UpdatedFolder' }, 300);
 
     // Optimistic local update
@@ -476,31 +268,29 @@ describe('Composable: useNotes', () => {
 
     // Advance timer past debounce threshold
     await vi.advanceTimersByTimeAsync(350);
+    vi.useRealTimers();
+
+    // Allow async Dexie operation to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(composable.saveStatus.value).toBe('saved');
-    expect(globalThis.$fetch).toHaveBeenCalledWith(
-      '/api/notes/note-1',
-      expect.objectContaining({
-        method: 'PUT',
-        body: expect.objectContaining({ content: 'Updated content live', folder: 'UpdatedFolder' }),
-      })
-    );
+    const note = await getNoteById('seed-welcome-guide');
+    expect(note?.content).toBe('Updated content live');
+    expect(note?.folder).toBe('UpdatedFolder');
   });
 
   it('flushes auto-save immediately on flushAutoSave()', async () => {
-    composable.selectNote('note-1');
+    composable.selectNote('seed-welcome-guide');
     composable.queueAutoSave({ title: 'Immediate Save Title' });
     expect(composable.saveStatus.value).toBe('unsaved');
 
     composable.flushAutoSave();
 
-    expect(globalThis.$fetch).toHaveBeenCalledWith(
-      '/api/notes/note-1',
-      expect.objectContaining({
-        method: 'PUT',
-        body: expect.objectContaining({ title: 'Immediate Save Title' }),
-      })
-    );
+    // Allow async Dexie operation to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const note = await getNoteById('seed-welcome-guide');
+    expect(note?.title).toBe('Immediate Save Title');
   });
 
   it('switches view mode correctly', () => {
@@ -536,10 +326,10 @@ describe('Composable: useNotes', () => {
       composable.isSidebarOpen.value = true;
       composable.viewMode.value = 'split';
 
-      composable.openNote('note-2');
+      composable.openNote('seed-project-roadmap');
 
-      expect(composable.selectedNoteId.value).toBe('note-2');
-      expect(composable.activeNote.value?.title).toBe('Nitro Backend');
+      expect(composable.selectedNoteId.value).toBe('seed-project-roadmap');
+      expect(composable.activeNote.value?.title).toContain('Project Architecture');
       expect(composable.isSidebarOpen.value).toBe(false);
       expect(composable.viewMode.value).toBe('editor');
     });
@@ -577,19 +367,19 @@ describe('Composable: useNotes', () => {
 
   describe('Persistence and Draft Backup', () => {
     it('persists selectedNoteId to localStorage on selectNote and createNote', async () => {
-      composable.selectNote('note-2');
-      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('note-2');
+      composable.selectNote('seed-project-roadmap');
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('seed-project-roadmap');
 
-      await composable.createNote({ title: 'Brand New Note' });
-      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('new-note-id');
+      const created = await composable.createNote({ title: 'Brand New Note' });
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe(created?.id);
     });
 
     it('restores selectedNoteId from localStorage during fetchNotes if valid', async () => {
-      localStorage.setItem('markdown-note-active-note-id', 'note-2');
+      localStorage.setItem('markdown-note-active-note-id', 'seed-project-roadmap');
       composable.selectedNoteId.value = null;
 
       await composable.fetchNotes();
-      expect(composable.selectedNoteId.value).toBe('note-2');
+      expect(composable.selectedNoteId.value).toBe('seed-project-roadmap');
     });
 
     it('falls back to first note if stored selectedNoteId is not in notes list during fetchNotes', async () => {
@@ -597,40 +387,44 @@ describe('Composable: useNotes', () => {
       composable.selectedNoteId.value = null;
 
       await composable.fetchNotes();
-      expect(composable.selectedNoteId.value).toBe('note-1');
-      expect(localStorage.getItem('markdown-note-active-note-id')).toBe('note-1');
+      expect(composable.selectedNoteId.value).toBe(composable.notes.value[0]?.id);
+      expect(localStorage.getItem('markdown-note-active-note-id')).toBe(composable.notes.value[0]?.id);
     });
 
     it('saves draft to localStorage on queueAutoSave and clears it upon successful save', async () => {
-      composable.selectNote('note-1');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      composable.selectNote('seed-welcome-guide');
       composable.queueAutoSave({ content: 'Work in progress draft content' }, 300);
 
-      expect(localStorage.getItem('markdown-note-draft-note-1')).toBe('Work in progress draft content');
+      expect(localStorage.getItem('markdown-note-draft-seed-welcome-guide')).toBe('Work in progress draft content');
 
       await vi.advanceTimersByTimeAsync(350);
+      vi.useRealTimers();
 
-      expect(localStorage.getItem('markdown-note-draft-note-1')).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(localStorage.getItem('markdown-note-draft-seed-welcome-guide')).toBeNull();
     });
 
     it('removes draft from localStorage when note is deleted', async () => {
-      localStorage.setItem('markdown-note-draft-note-1', 'Some lingering draft');
-      await composable.deleteNote('note-1');
+      localStorage.setItem('markdown-note-draft-seed-welcome-guide', 'Some lingering draft');
+      await composable.deleteNote('seed-welcome-guide');
 
-      expect(localStorage.getItem('markdown-note-draft-note-1')).toBeNull();
+      expect(localStorage.getItem('markdown-note-draft-seed-welcome-guide')).toBeNull();
     });
 
     it('restores draft content when fetchNotes loads notes with existing drafts', async () => {
-      localStorage.setItem('markdown-note-draft-note-3', 'Restored draft content from browser storage');
+      localStorage.setItem('markdown-note-draft-seed-code-snippets', 'Restored draft content from browser storage');
 
       await composable.fetchNotes();
 
-      const note3 = composable.notes.value.find((n) => n.id === 'note-3');
+      const note3 = composable.notes.value.find((n) => n.id === 'seed-code-snippets');
       expect(note3?.content).toBe('Restored draft content from browser storage');
     });
 
     it('persists expandedFolders to localStorage when modified', async () => {
       composable.toggleFolder('Guides');
-      await vi.advanceTimersByTimeAsync(10);
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const stored = localStorage.getItem('markdown-note-expanded-folders');
       expect(stored).not.toBeNull();

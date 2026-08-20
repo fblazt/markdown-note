@@ -1,17 +1,13 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { Dexie, type Table } from 'dexie';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo } from '../../shared/types/note';
 
-function generateId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'note_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
+export interface FolderRecord {
+  name: string;
 }
 
-const INITIAL_FOLDERS = ['Guides', 'Projects', 'Code'];
+export const INITIAL_FOLDERS = ['Guides', 'Projects', 'Code'];
 
-const SEED_NOTES: Note[] = [
+export const SEED_NOTES: Note[] = [
   {
     id: 'seed-welcome-guide',
     title: '✨ Welcome to Markdown Notes',
@@ -161,48 +157,54 @@ export default defineEventHandler(async (event) => {
   },
 ];
 
-const STORAGE_DIR = path.resolve(process.cwd(), '.data', 'storage');
-const STORAGE_FILE = path.resolve(STORAGE_DIR, 'notes.json');
+export class NotesDatabase extends Dexie {
+  notes!: Table<Note, string>;
+  folders!: Table<FolderRecord, string>;
 
-let notesDb: Note[] = [];
-let foldersDb: Set<string> = new Set<string>();
-
-function saveToDisk(): void {
-  try {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true });
-    const payload = {
-      notes: notesDb,
-      folders: Array.from(foldersDb),
-    };
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(payload, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Failed to save notes database to disk:', err);
+  constructor() {
+    super('MarkdownNotesDB');
+    this.version(1).stores({
+      notes: 'id, title, folder, *tags, createdAt, updatedAt',
+      folders: 'name',
+    });
   }
 }
 
-function initDb(): void {
-  try {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true });
-    if (fs.existsSync(STORAGE_FILE)) {
-      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
-        notesDb = parsed.notes;
-        foldersDb = new Set(parsed.folders);
-        return;
+export const db = new NotesDatabase();
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'note_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
+}
+
+let seedingPromise: Promise<void> | null = null;
+
+export async function seedInitialData(): Promise<void> {
+  const notesCount = await db.notes.count();
+  const foldersCount = await db.folders.count();
+  if (notesCount === 0 && foldersCount === 0) {
+    await db.transaction('rw', db.notes, db.folders, async () => {
+      const nc = await db.notes.count();
+      const fc = await db.folders.count();
+      if (nc === 0 && fc === 0) {
+        await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name })));
+        await db.notes.bulkAdd(SEED_NOTES);
       }
-    }
-  } catch (err) {
-    console.error('Failed to read notes database from disk, falling back to seed:', err);
+    });
   }
-
-  notesDb = JSON.parse(JSON.stringify(SEED_NOTES));
-  foldersDb = new Set(INITIAL_FOLDERS);
-  saveToDisk();
 }
 
-// Initialize on module load
-initDb();
+async function ensureSeeded(): Promise<void> {
+  if (seedingPromise) {
+    return seedingPromise;
+  }
+  seedingPromise = seedInitialData().finally(() => {
+    seedingPromise = null;
+  });
+  return seedingPromise;
+}
 
 /**
  * Normalizes folder path by trimming segments, collapsing multiple slashes,
@@ -217,20 +219,27 @@ export function normalizeFolderPath(path?: string): string {
     .join('/');
 }
 
-export function getAllNotes(): Note[] {
-  return [...notesDb].sort(
+export async function getAllNotes(): Promise<Note[]> {
+  await ensureSeeded();
+  const notes = await db.notes.toArray();
+  return notes.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 }
 
-export function getNoteById(id: string): Note | null {
-  const note = notesDb.find((n) => n.id === id);
+export async function getNoteById(id: string): Promise<Note | null> {
+  await ensureSeeded();
+  const note = await db.notes.get(id);
   return note ? { ...note } : null;
 }
 
-export function getAllFolders(): FolderInfo[] {
-  const allFolderNames = new Set<string>(foldersDb);
-  for (const note of notesDb) {
+export async function getAllFolders(): Promise<FolderInfo[]> {
+  await ensureSeeded();
+  const folderRecords = await db.folders.toArray();
+  const allFolderNames = new Set<string>(folderRecords.map((f) => f.name));
+  const allNotes = await db.notes.toArray();
+
+  for (const note of allNotes) {
     if (note.folder) {
       const norm = normalizeFolderPath(note.folder);
       if (norm) {
@@ -248,16 +257,18 @@ export function getAllFolders(): FolderInfo[] {
 
   return sortedNames.map((name) => ({
     name,
-    noteCount: notesDb.filter((n) => n.folder === name).length,
+    noteCount: allNotes.filter((n) => n.folder === name).length,
   }));
 }
 
-export function createFolder(path: string): boolean {
+export async function createFolder(path: string): Promise<boolean> {
+  await ensureSeeded();
   const normalized = normalizeFolderPath(path);
   if (!normalized) {
     return false;
   }
-  if (foldersDb.has(normalized)) {
+  const existing = await db.folders.get(normalized);
+  if (existing) {
     return false;
   }
 
@@ -266,14 +277,14 @@ export function createFolder(path: string): boolean {
   let currentPath = '';
   for (let i = 0; i < segments.length; i++) {
     currentPath = currentPath ? `${currentPath}/${segments[i]}` : segments[i]!;
-    foldersDb.add(currentPath);
+    await db.folders.put({ name: currentPath });
   }
 
-  saveToDisk();
   return true;
 }
 
-export function renameFolder(oldPath: string, newPath: string): boolean {
+export async function renameFolder(oldPath: string, newPath: string): Promise<boolean> {
+  await ensureSeeded();
   const normOld = normalizeFolderPath(oldPath);
   const normNew = normalizeFolderPath(newPath);
 
@@ -281,18 +292,22 @@ export function renameFolder(oldPath: string, newPath: string): boolean {
     return false;
   }
 
+  const folderRecords = await db.folders.toArray();
+  const folderNames = new Set<string>(folderRecords.map((f) => f.name));
+  const allNotes = await db.notes.toArray();
+
   // Check if source folder exists (exact match or parent of subfolders/notes)
   const sourceExists =
-    foldersDb.has(normOld) ||
-    Array.from(foldersDb).some((f) => f.startsWith(normOld + '/')) ||
-    notesDb.some((n) => n.folder === normOld || n.folder?.startsWith(normOld + '/'));
+    folderNames.has(normOld) ||
+    Array.from(folderNames).some((f) => f.startsWith(normOld + '/')) ||
+    allNotes.some((n) => n.folder === normOld || n.folder?.startsWith(normOld + '/'));
 
   if (!sourceExists) {
     return false;
   }
 
   // Prevent renaming to an existing distinct folder
-  if (normOld !== normNew && foldersDb.has(normNew)) {
+  if (normOld !== normNew && folderNames.has(normNew)) {
     return false;
   }
 
@@ -303,96 +318,109 @@ export function renameFolder(oldPath: string, newPath: string): boolean {
 
   // Find all folders to rename
   const foldersToRename: string[] = [];
-  for (const f of foldersDb) {
+  for (const f of folderNames) {
     if (f === normOld || f.startsWith(normOld + '/')) {
       foldersToRename.push(f);
     }
   }
 
-  for (const f of foldersToRename) {
-    foldersDb.delete(f);
-    let renamed = normNew;
-    if (f.startsWith(normOld + '/')) {
-      renamed = normNew + f.slice(normOld.length);
+  await db.transaction('rw', db.folders, db.notes, async () => {
+    for (const f of foldersToRename) {
+      await db.folders.delete(f);
+      let renamed = normNew;
+      if (f.startsWith(normOld + '/')) {
+        renamed = normNew + f.slice(normOld.length);
+      }
+      // Auto-register intermediate paths for renamed folder
+      const segments = renamed.split('/');
+      let cur = '';
+      for (const seg of segments) {
+        cur = cur ? `${cur}/${seg}` : seg;
+        await db.folders.put({ name: cur });
+      }
     }
-    // Auto-register intermediate paths for renamed folder
-    const segments = renamed.split('/');
+
+    // Ensure new parent paths for normNew exist in folders table
+    const newSegments = normNew.split('/');
     let cur = '';
-    for (const seg of segments) {
+    for (const seg of newSegments) {
       cur = cur ? `${cur}/${seg}` : seg;
-      foldersDb.add(cur);
+      await db.folders.put({ name: cur });
     }
-  }
 
-  // Ensure new parent paths for normNew exist in foldersDb
-  const newSegments = normNew.split('/');
-  let cur = '';
-  for (const seg of newSegments) {
-    cur = cur ? `${cur}/${seg}` : seg;
-    foldersDb.add(cur);
-  }
-
-  // Cascade to all notes
-  const now = new Date().toISOString();
-  for (const note of notesDb) {
-    if (note.folder === normOld) {
-      note.folder = normNew;
-      note.updatedAt = now;
-    } else if (note.folder && note.folder.startsWith(normOld + '/')) {
-      note.folder = normNew + note.folder.slice(normOld.length);
-      note.updatedAt = now;
+    // Cascade to all notes
+    const now = new Date().toISOString();
+    for (const note of allNotes) {
+      if (note.folder === normOld) {
+        note.folder = normNew;
+        note.updatedAt = now;
+        await db.notes.put(note);
+      } else if (note.folder && note.folder.startsWith(normOld + '/')) {
+        note.folder = normNew + note.folder.slice(normOld.length);
+        note.updatedAt = now;
+        await db.notes.put(note);
+      }
     }
-  }
+  });
 
-  saveToDisk();
   return true;
 }
 
-export function deleteFolder(path: string, deleteNotes = false): boolean {
+export async function deleteFolder(path: string, deleteNotes = false): Promise<boolean> {
+  await ensureSeeded();
   const normPath = normalizeFolderPath(path);
   if (!normPath) {
     return false;
   }
 
+  const folderRecords = await db.folders.toArray();
+  const folderNames = new Set<string>(folderRecords.map((f) => f.name));
+  const allNotes = await db.notes.toArray();
+
   const folderExists =
-    foldersDb.has(normPath) ||
-    Array.from(foldersDb).some((f) => f.startsWith(normPath + '/')) ||
-    notesDb.some((n) => n.folder === normPath || n.folder?.startsWith(normPath + '/'));
+    folderNames.has(normPath) ||
+    Array.from(folderNames).some((f) => f.startsWith(normPath + '/')) ||
+    allNotes.some((n) => n.folder === normPath || n.folder?.startsWith(normPath + '/'));
 
   if (!folderExists) {
     return false;
   }
 
-  // Remove path and all subfolders from foldersDb
+  // Remove path and all subfolders from folders table
   const toDelete: string[] = [];
-  for (const f of foldersDb) {
+  for (const f of folderNames) {
     if (f === normPath || f.startsWith(normPath + '/')) {
       toDelete.push(f);
     }
   }
-  for (const f of toDelete) {
-    foldersDb.delete(f);
-  }
 
-  if (deleteNotes) {
-    notesDb = notesDb.filter(
-      (n) => !(n.folder === normPath || (n.folder && n.folder.startsWith(normPath + '/')))
-    );
-  } else {
-    const now = new Date().toISOString();
-    for (const note of notesDb) {
-      if (note.folder === normPath || (note.folder && note.folder.startsWith(normPath + '/'))) {
-        delete note.folder;
-        note.updatedAt = now;
+  await db.transaction('rw', db.folders, db.notes, async () => {
+    for (const f of toDelete) {
+      await db.folders.delete(f);
+    }
+
+    if (deleteNotes) {
+      for (const note of allNotes) {
+        if (note.folder === normPath || (note.folder && note.folder.startsWith(normPath + '/'))) {
+          await db.notes.delete(note.id);
+        }
+      }
+    } else {
+      const now = new Date().toISOString();
+      for (const note of allNotes) {
+        if (note.folder === normPath || (note.folder && note.folder.startsWith(normPath + '/'))) {
+          delete note.folder;
+          note.updatedAt = now;
+          await db.notes.put(note);
+        }
       }
     }
-  }
+  });
 
-  saveToDisk();
   return true;
 }
 
-export function moveFolder(sourcePath: string, targetParentPath?: string): boolean {
+export async function moveFolder(sourcePath: string, targetParentPath?: string): Promise<boolean> {
   const normSource = normalizeFolderPath(sourcePath);
   if (!normSource) {
     return false;
@@ -415,7 +443,8 @@ export function moveFolder(sourcePath: string, targetParentPath?: string): boole
   return renameFolder(normSource, newPath);
 }
 
-export function createNote(dto: CreateNoteDTO): Note {
+export async function createNote(dto: CreateNoteDTO): Promise<Note> {
+  await ensureSeeded();
   const now = new Date().toISOString();
   const folder = dto.folder ? normalizeFolderPath(dto.folder) || undefined : undefined;
   if (folder) {
@@ -423,7 +452,7 @@ export function createNote(dto: CreateNoteDTO): Note {
     let cur = '';
     for (const s of segs) {
       cur = cur ? `${cur}/${s}` : s;
-      foldersDb.add(cur);
+      await db.folders.put({ name: cur });
     }
   }
 
@@ -436,18 +465,17 @@ export function createNote(dto: CreateNoteDTO): Note {
     createdAt: now,
     updatedAt: now,
   };
-  notesDb.push(newNote);
-  saveToDisk();
+  await db.notes.add(newNote);
   return { ...newNote };
 }
 
-export function updateNote(id: string, dto: UpdateNoteDTO): Note | null {
-  const index = notesDb.findIndex((n) => n.id === id);
-  if (index === -1) {
+export async function updateNote(id: string, dto: UpdateNoteDTO): Promise<Note | null> {
+  await ensureSeeded();
+  const existing = await db.notes.get(id);
+  if (!existing) {
     return null;
   }
 
-  const existing = notesDb[index]!;
   const now = new Date().toISOString();
 
   let folder = existing.folder;
@@ -458,7 +486,7 @@ export function updateNote(id: string, dto: UpdateNoteDTO): Note | null {
       let cur = '';
       for (const s of segs) {
         cur = cur ? `${cur}/${s}` : s;
-        foldersDb.add(cur);
+        await db.folders.put({ name: cur });
       }
     }
   }
@@ -468,28 +496,33 @@ export function updateNote(id: string, dto: UpdateNoteDTO): Note | null {
     title: dto.title !== undefined ? dto.title.trim() || 'Untitled Note' : existing.title,
     content: dto.content !== undefined ? dto.content : existing.content,
     tags: dto.tags !== undefined ? (Array.isArray(dto.tags) ? [...dto.tags] : []) : existing.tags,
-    ...(folder ? { folder } : {}),
     createdAt: existing.createdAt,
     updatedAt: now,
   };
 
-  notesDb[index] = updated;
-  saveToDisk();
+  if (folder) {
+    updated.folder = folder;
+  }
+
+  await db.notes.put(updated);
   return { ...updated };
 }
 
-export function deleteNote(id: string): boolean {
-  const index = notesDb.findIndex((n) => n.id === id);
-  if (index === -1) {
+export async function deleteNote(id: string): Promise<boolean> {
+  await ensureSeeded();
+  const existing = await db.notes.get(id);
+  if (!existing) {
     return false;
   }
-  notesDb.splice(index, 1);
-  saveToDisk();
+  await db.notes.delete(id);
   return true;
 }
 
-export function resetDb(): void {
-  notesDb = JSON.parse(JSON.stringify(SEED_NOTES));
-  foldersDb = new Set(INITIAL_FOLDERS);
-  saveToDisk();
+export async function resetDb(): Promise<void> {
+  await db.transaction('rw', db.notes, db.folders, async () => {
+    await db.notes.clear();
+    await db.folders.clear();
+    await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name })));
+    await db.notes.bulkAdd(SEED_NOTES);
+  });
 }

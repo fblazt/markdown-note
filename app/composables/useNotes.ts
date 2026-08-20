@@ -1,5 +1,17 @@
 import { ref, computed, watch } from 'vue';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo, FolderTreeNode, SaveStatus } from '../../shared/types/note';
+import {
+  getAllNotes,
+  getAllFolders,
+  createFolder as dbCreateFolder,
+  renameFolder as dbRenameFolder,
+  deleteFolder as dbDeleteFolder,
+  moveFolder as dbMoveFolder,
+  createNote as dbCreateNote,
+  updateNote as dbUpdateNote,
+  deleteNote as dbDeleteNote,
+  seedInitialData,
+} from '../utils/db';
 
 const getInitialExpandedFolders = (): string[] => {
   if (typeof localStorage !== 'undefined') {
@@ -57,6 +69,45 @@ watch(
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveDTO: UpdateNoteDTO | null = null;
 
+async function updateNoteStandalone(id: string, dto: UpdateNoteDTO): Promise<Note | null> {
+  isSaving.value = true;
+  saveStatus.value = 'saving';
+
+  try {
+    const updated = await dbUpdateNote(id, dto);
+    if (!updated) {
+      saveStatus.value = 'error';
+      return null;
+    }
+
+    const index = notes.value.findIndex((n) => n.id === id);
+    if (index !== -1) {
+      notes.value[index] = updated;
+    }
+    saveStatus.value = 'saved';
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(`markdown-note-draft-${id}`);
+      } catch {}
+    }
+
+    if (dto.folder !== undefined) {
+      if (updated.folder && !expandedFolders.value.includes(updated.folder)) {
+        expandedFolders.value.push(updated.folder);
+      }
+    }
+
+    return updated;
+  } catch (err) {
+    console.error(`Failed to update note ${id}:`, err);
+    saveStatus.value = 'error';
+    return null;
+  } finally {
+    isSaving.value = false;
+  }
+}
+
 // Global event listeners for browser environment
 if (typeof window !== 'undefined') {
   const updateMobile = () => {
@@ -68,16 +119,6 @@ if (typeof window !== 'undefined') {
     if (pendingSaveDTO && selectedNoteId.value) {
       const currentId = selectedNoteId.value;
       const toSave = { ...pendingSaveDTO };
-      if (typeof fetch === 'function') {
-        try {
-          fetch(`/api/notes/${currentId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(toSave),
-            keepalive: true,
-          }).catch(() => {});
-        } catch {}
-      }
       if (debounceTimer) {
         clearTimeout(debounceTimer);
         debounceTimer = null;
@@ -105,44 +146,6 @@ if (typeof window !== 'undefined') {
         }
       }
     });
-  }
-}
-
-async function updateNoteStandalone(id: string, dto: UpdateNoteDTO): Promise<Note | null> {
-  isSaving.value = true;
-  saveStatus.value = 'saving';
-
-  try {
-    const updated = await $fetch<Note>(`/api/notes/${id}`, {
-      method: 'PUT',
-      body: dto,
-    });
-
-    const index = notes.value.findIndex((n) => n.id === id);
-    if (index !== -1) {
-      notes.value[index] = updated;
-    }
-    saveStatus.value = 'saved';
-
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.removeItem(`markdown-note-draft-${id}`);
-      } catch {}
-    }
-
-    if (dto.folder !== undefined) {
-      if (updated.folder && !expandedFolders.value.includes(updated.folder)) {
-        expandedFolders.value.push(updated.folder);
-      }
-    }
-
-    return updated;
-  } catch (err) {
-    console.error(`Failed to update note ${id}:`, err);
-    saveStatus.value = 'error';
-    return null;
-  } finally {
-    isSaving.value = false;
   }
 }
 
@@ -321,7 +324,7 @@ export function useNotes() {
 
   async function fetchFolders(): Promise<void> {
     try {
-      const data = await $fetch<FolderInfo[]>('/api/folders');
+      const data = await getAllFolders();
       folders.value = data;
       const validNames = new Set(data.map((f) => f.name));
       expandedFolders.value = expandedFolders.value.filter(
@@ -353,10 +356,8 @@ export function useNotes() {
     const trimmed = name?.trim();
     if (!trimmed) return false;
     try {
-      await $fetch<{ success: boolean; name: string }>('/api/folders', {
-        method: 'POST',
-        body: { name: trimmed },
-      });
+      const success = await dbCreateFolder(trimmed);
+      if (!success) return false;
       await fetchFolders();
 
       // Auto-expand created folder and its ancestor folders
@@ -388,13 +389,8 @@ export function useNotes() {
     const trimmedNew = newName?.trim();
     if (!trimmedNew || trimmedNew === oldName) return false;
     try {
-      await $fetch<{ success: boolean; oldName: string; newName: string }>(
-        `/api/folders/${encodeURIComponent(oldName)}`,
-        {
-          method: 'PUT',
-          body: { newName: trimmedNew },
-        }
-      );
+      const success = await dbRenameFolder(oldName, trimmedNew);
+      if (!success) return false;
 
       notes.value.forEach((n) => {
         if (n.folder === oldName) {
@@ -440,15 +436,11 @@ export function useNotes() {
     }
 
     try {
-      const res = await $fetch<{ success: boolean; oldName: string; newName: string }>(
-        `/api/folders/${encodeURIComponent(trimmedSource)}`,
-        {
-          method: 'PUT',
-          body: { targetParent: trimmedTarget },
-        }
-      );
+      const success = await dbMoveFolder(trimmedSource, trimmedTarget);
+      if (!success) return false;
 
-      const newPath = res.newName;
+      const baseName = trimmedSource.split('/').pop()!;
+      const newPath = trimmedTarget ? `${trimmedTarget}/${baseName}` : baseName;
 
       notes.value.forEach((n) => {
         if (n.folder === trimmedSource) {
@@ -492,13 +484,8 @@ export function useNotes() {
 
   async function deleteFolder(name: string, deleteNotes = false): Promise<boolean> {
     try {
-      await $fetch<{ success: boolean; name: string }>(
-        `/api/folders/${encodeURIComponent(name)}`,
-        {
-          method: 'DELETE',
-          query: { deleteNotes },
-        }
-      );
+      const success = await dbDeleteFolder(name, deleteNotes);
+      if (!success) return false;
 
       if (deleteNotes) {
         const deletedNoteIds = notes.value
@@ -569,8 +556,9 @@ export function useNotes() {
   async function fetchNotes(): Promise<void> {
     isLoading.value = true;
     try {
+      await seedInitialData();
       const [data] = await Promise.all([
-        $fetch<Note[]>('/api/notes'),
+        getAllNotes(),
         fetchFolders(),
       ]);
 
@@ -658,10 +646,7 @@ export function useNotes() {
         folder: folderVal ? folderVal.trim() : undefined,
       };
 
-      const created = await $fetch<Note>('/api/notes', {
-        method: 'POST',
-        body: payload,
-      });
+      const created = await dbCreateNote(payload);
 
       notes.value = [created, ...notes.value];
       selectedNoteId.value = created.id;
@@ -699,10 +684,11 @@ export function useNotes() {
     saveStatus.value = 'saving';
 
     try {
-      const updated = await $fetch<Note>(`/api/notes/${id}`, {
-        method: 'PUT',
-        body: dto,
-      });
+      const updated = await dbUpdateNote(id, dto);
+      if (!updated) {
+        saveStatus.value = 'error';
+        return null;
+      }
 
       const index = notes.value.findIndex((n) => n.id === id);
       if (index !== -1) {
@@ -741,9 +727,8 @@ export function useNotes() {
     }
 
     try {
-      await $fetch<{ success: boolean; id: string }>(`/api/notes/${id}`, {
-        method: 'DELETE',
-      });
+      const success = await dbDeleteNote(id);
+      if (!success) return false;
 
       notes.value = notes.value.filter((n) => n.id !== id);
 

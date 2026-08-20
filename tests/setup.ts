@@ -1,4 +1,6 @@
-// Global test setup for Nitro / H3 / Nuxt environment
+import 'fake-indexeddb/auto';
+
+// Global test setup for Nuxt environment
 (globalThis as any).defineEventHandler = (fn: any) => fn;
 
 (globalThis as any).getRouterParam = (event: any, name: string) => {
