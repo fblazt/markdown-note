@@ -19,11 +19,13 @@
         <button
           v-else
           class="btn-icon header-toggle-sidebar"
+          :class="{ 'sidebar-is-closed': !isSidebarOpen }"
           @click="toggleSidebar"
           :title="isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
           aria-label="Toggle sidebar"
+          :aria-expanded="isSidebarOpen"
         >
-          <PanelLeft :size="18" />
+          <PanelLeft :size="18" class="sidebar-toggle-icon" />
         </button>
 
         <div class="brand">
@@ -81,7 +83,7 @@
     <!-- Main Workspace -->
     <main class="app-main" :class="{ 'is-mobile': isMobile }">
       <!-- Sidebar Pane (List View) -->
-      <NoteSidebar v-show="isSidebarOpen" />
+      <NoteSidebar />
 
       <!-- Editor Pane -->
       <NoteEditor
@@ -209,6 +211,18 @@ onUnmounted(() => {
 .mobile-back-text {
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.header-toggle-sidebar {
+  transition: background-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-toggle-icon {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+}
+
+.header-toggle-sidebar.sidebar-is-closed .sidebar-toggle-icon {
+  opacity: 0.75;
 }
 
 .brand {
@@ -347,6 +361,13 @@ onUnmounted(() => {
   .btn-header-new {
     min-width: 40px;
     padding: 0.45rem 0.65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-toggle-sidebar,
+  .sidebar-toggle-icon {
+    transition: none !important;
   }
 }
 </style>

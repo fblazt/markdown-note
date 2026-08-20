@@ -747,8 +747,23 @@ function formatDate(isoString: string): string {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s ease, width 0.25s ease;
+  flex-shrink: 0;
+  overflow: hidden;
+  will-change: margin-left, opacity;
+  transition:
+    margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease,
+    border-color 0.25s ease,
+    visibility 0.25s ease;
   z-index: 10;
+}
+
+.note-sidebar.sidebar-closed {
+  margin-left: calc(-1 * var(--sidebar-width));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  border-right-color: transparent;
 }
 
 .sidebar-header {
@@ -1441,6 +1456,17 @@ function formatDate(isoString: string): string {
     min-width: 100%;
     border-right: none;
     flex: 1;
+    transition:
+      margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.2s ease,
+      visibility 0.25s ease;
+  }
+
+  .note-sidebar.sidebar-closed {
+    margin-left: -100%;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .folder-header {
@@ -1465,6 +1491,12 @@ function formatDate(isoString: string): string {
 
   .folder-note-item {
     padding: 0.75rem 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-sidebar {
+    transition: none !important;
   }
 }
 </style>
