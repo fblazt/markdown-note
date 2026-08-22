@@ -23,6 +23,7 @@ A blazing fast, distraction-free markdown note-taking app built with **Nuxt 3**,
 * **Auto-Save**: Changes are automatically debounced and saved.
 * **Tagging & Instant Search**: Filter by tags or search full text instantly.
 * **GFM Support**: Full GitHub Flavored Markdown support including tables, task lists, and syntax highlighting.
+* **Mermaid Flowcharts & Diagrams**: Render interactive flowcharts, state machines, and sequence diagrams directly from markdown code blocks.
 * **XSS Protection**: Complete sanitization powered by isomorphic DOMPurify.
 
 ---
@@ -76,8 +77,22 @@ export const useNoteAutoSave = (saveFn: () => Promise<void>) => {
   return { debouncedSave, isSaving };
 };
 \`\`\`
+
+---
+
+### Mermaid Flowcharts & Diagrams
+Create responsive diagrams directly inside your notes:
+
+\`\`\`mermaid
+flowchart LR
+    A[📝 Write Markdown] --> B{Mermaid Block?}
+    B -->|Yes| C[⚡ Live SVG Render]
+    B -->|No| D[📄 Standard Preview]
+    C --> E[🎨 Kanagawa Theme]
+    D --> E
+\`\`\`
 `,
-    tags: ['guide', 'markdown', 'welcome'],
+    tags: ['guide', 'markdown', 'welcome', 'mermaid', 'diagram'],
     folder: 'Guides',
     createdAt: '2025-01-01T08:00:00.000Z',
     updatedAt: '2025-01-01T08:00:00.000Z',
@@ -101,13 +116,24 @@ export const useNoteAutoSave = (saveFn: () => Promise<void>) => {
    - Nitro REST API endpoints in \`server/api/notes/\`.
    - In-memory data store with reset capability in \`server/utils/db.ts\`.
 
+## 🏗️ System Architecture Flow
+
+\`\`\`mermaid
+flowchart TD
+    User([👤 User]) <--> NoteEditor[📝 NoteEditor & Toolbar]
+    User <--> NotePreview[👁️ NotePreview & Mermaid]
+    NoteEditor -->|Auto-save| useNotes[⚡ useNotes Composable]
+    useNotes -->|IndexedDB Operations| DexieDB[(💾 Dexie NotesDatabase)]
+    useTheme[🎨 useTheme] -.->|Synchronize Theme| NotePreview
+\`\`\`
+
 ## 📌 Next Milestones
 - [x] Core MVP Architecture
 - [x] Automated Vitest Unit & API Suite
 - [ ] Offline local storage sync
 - [ ] Export to PDF & Markdown file
 `,
-    tags: ['architecture', 'roadmap', 'nuxt'],
+    tags: ['architecture', 'roadmap', 'nuxt', 'diagram'],
     folder: 'Projects',
     createdAt: '2025-01-02T10:30:00.000Z',
     updatedAt: '2025-01-02T11:00:00.000Z',

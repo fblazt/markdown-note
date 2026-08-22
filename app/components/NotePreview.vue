@@ -64,13 +64,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Eye, Copy, Check, Code } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
-import { parseMarkdown, getWordCount, getCharCount, getReadingTime } from '../utils/markdown';
+import { useTheme } from '../composables/useTheme';
+import { parseMarkdown, getWordCount, getCharCount, getReadingTime, escapeHtml } from '../utils/markdown';
+import { renderMermaidDiagram } from '../utils/mermaid';
 import ExportDropdown from './ExportDropdown.vue';
 
 const { activeNote } = useNotes();
+const { resolvedTheme } = useTheme();
 
 const copiedMd = ref(false);
 const copiedHtml = ref(false);
@@ -90,6 +93,52 @@ const charCount = computed(() => {
 
 const readingTime = computed(() => {
   return activeNote.value ? getReadingTime(activeNote.value.content) : 0;
+});
+
+async function renderAllDiagrams() {
+  if (typeof document === 'undefined') return;
+  const container = document.querySelector('.markdown-body');
+  if (!container) return;
+
+  const diagramElements = container.querySelectorAll<HTMLElement>('.mermaid-diagram');
+  if (diagramElements.length === 0) return;
+
+  const isDark = resolvedTheme.value === 'dark';
+
+  await Promise.all(
+    Array.from(diagramElements).map(async (element, idx) => {
+      const encodedCode = element.getAttribute('data-mermaid');
+      if (!encodedCode) return;
+
+      let rawCode = '';
+      try {
+        rawCode = decodeURIComponent(encodedCode);
+      } catch {
+        rawCode = encodedCode;
+      }
+
+      const id = `mermaid-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`;
+      const result = await renderMermaidDiagram(id, rawCode, isDark);
+
+      if ('svg' in result && result.svg) {
+        element.innerHTML = result.svg;
+      } else if ('error' in result) {
+        element.innerHTML = `<div class="mermaid-error"><div class="mermaid-error-title">Mermaid Syntax Error</div><pre class="mermaid-error-code"><code>${escapeHtml(rawCode)}</code></pre><div class="mermaid-error-msg">${escapeHtml(result.error)}</div></div>`;
+      }
+    })
+  );
+}
+
+onMounted(() => {
+  renderAllDiagrams();
+});
+
+watch(renderedHtml, () => {
+  nextTick(renderAllDiagrams);
+});
+
+watch(resolvedTheme, () => {
+  nextTick(renderAllDiagrams);
 });
 
 async function copyMarkdown() {

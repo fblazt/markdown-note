@@ -54,7 +54,7 @@ describe('Composable: useNotes', () => {
 
   it('computes allTags sorted without duplicates', () => {
     const tags = composable.allTags.value;
-    expect(tags).toEqual(['architecture', 'code', 'guide', 'markdown', 'nuxt', 'roadmap', 'snippets', 'typescript', 'welcome']);
+    expect(tags).toEqual(['architecture', 'code', 'diagram', 'guide', 'markdown', 'mermaid', 'nuxt', 'roadmap', 'snippets', 'typescript', 'welcome']);
   });
 
   it('filters notes by search query across title, content, tags, and folder', () => {

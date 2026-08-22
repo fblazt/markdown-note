@@ -603,6 +603,74 @@ html, body {
   margin: 1rem 0;
 }
 
+/* Mermaid Diagram Previews & Error Rendering */
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.mermaid-fallback {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.mermaid-error {
+  width: 100%;
+  background-color: rgba(196, 116, 110, 0.1);
+  border: 1px solid var(--accent-danger);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.mermaid-error-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-danger);
+  margin-bottom: 0.5rem;
+}
+
+.mermaid-error-code {
+  margin: 0.5rem 0 !important;
+  padding: 0.6rem 0.8rem !important;
+  background-color: var(--bg-code) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: 0.8rem !important;
+  overflow-x: auto;
+}
+
+.mermaid-error-code code {
+  color: var(--text-muted) !important;
+}
+
+.mermaid-error-msg {
+  font-size: 0.75rem;
+  color: var(--accent-danger);
+  font-family: var(--font-mono);
+  margin-top: 0.4rem;
+  word-break: break-word;
+}
+
 /* ==========================================================================
    Responsive Utilities & Mobile Touch Optimizations
    ========================================================================== */

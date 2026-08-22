@@ -1,15 +1,39 @@
 import { marked } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
 
-// Configure marked options for GitHub Flavored Markdown
+/**
+ * Escapes special HTML characters to prevent XSS.
+ */
+export function escapeHtml(str: string): string {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Configure marked options for GitHub Flavored Markdown with Mermaid renderer
 marked.use({
   gfm: true,
   breaks: true,
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }) {
+      const cleanLang = (lang || '').trim().toLowerCase();
+      if (cleanLang === 'mermaid' || cleanLang === 'flowchart') {
+        const encoded = encodeURIComponent(text);
+        return `<div class="mermaid-diagram" data-mermaid="${encoded}"><pre class="mermaid-fallback"><code>${escapeHtml(text)}</code></pre></div>`;
+      }
+      return false;
+    },
+  },
 });
 
 /**
  * Parses markdown text and returns sanitized HTML string.
- * Strictly prevents XSS by filtering malicious tags, attributes, and URI schemes.
+ * Strictly prevents XSS by filtering malicious tags, attributes, and URI schemes
+ * while permitting SVG and Mermaid diagram attributes.
  */
 export function parseMarkdown(content: string): string {
   if (!content || typeof content !== 'string') {
@@ -21,9 +45,25 @@ export function parseMarkdown(content: string): string {
 
   // Sanitize HTML with DOMPurify
   const cleanHtml = DOMPurify.sanitize(rawHtml, {
-    FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'script', 'style', 'link'],
-    ADD_ATTR: ['target', 'rel', 'class', 'type', 'checked', 'disabled'],
-    ADD_TAGS: ['input'],
+    FORBID_TAGS: ['form', 'iframe', 'object', 'embed', 'base', 'script', 'link'],
+    ADD_ATTR: ['target', 'rel', 'class', 'type', 'checked', 'disabled', 'data-mermaid'],
+    ADD_TAGS: [
+      'input',
+      'svg',
+      'g',
+      'path',
+      'rect',
+      'circle',
+      'text',
+      'line',
+      'polygon',
+      'polyline',
+      'marker',
+      'defs',
+      'use',
+      'foreignobject',
+      'style',
+    ],
   });
 
   return cleanHtml;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseMarkdown,
+  escapeHtml,
   getWordCount,
   getCharCount,
   getReadingTime,
@@ -46,12 +47,13 @@ describe('Markdown Parser & Sanitizer: app/utils/markdown.ts', () => {
       expect(html).toContain('Pending task');
     });
 
-    it('renders code blocks and inline code', () => {
+    it('renders regular code blocks and inline code', () => {
       const input = '`inline code`\n\n```typescript\nconst x = 42;\n```';
       const html = parseMarkdown(input);
       expect(html).toContain('<code>inline code</code>');
       expect(html).toContain('<pre>');
       expect(html).toContain('const x = 42;');
+      expect(html).not.toContain('class="mermaid-diagram"');
     });
 
     it('renders GFM tables', () => {
@@ -73,6 +75,39 @@ describe('Markdown Parser & Sanitizer: app/utils/markdown.ts', () => {
       expect(parseMarkdown(null)).toBe('');
       // @ts-expect-error test non-string input
       expect(parseMarkdown(undefined)).toBe('');
+    });
+  });
+
+  describe('Mermaid & Flowchart Code Block Parsing', () => {
+    it('renders mermaid code block with data-mermaid and fallback', () => {
+      const mermaidCode = 'graph TD;\n  A-->B;\n  B-->C;';
+      const input = `\`\`\`mermaid\n${mermaidCode}\n\`\`\``;
+      const html = parseMarkdown(input);
+
+      expect(html).toContain('class="mermaid-diagram"');
+      expect(html).toContain(`data-mermaid="${encodeURIComponent(mermaidCode)}"`);
+      expect(html).toContain('class="mermaid-fallback"');
+      expect(html).toContain('A--&gt;B;');
+    });
+
+    it('renders flowchart code block with data-mermaid and fallback', () => {
+      const flowchartCode = 'flowchart LR\n  Start --> Stop';
+      const input = `\`\`\`flowchart\n${flowchartCode}\n\`\`\``;
+      const html = parseMarkdown(input);
+
+      expect(html).toContain('class="mermaid-diagram"');
+      expect(html).toContain(`data-mermaid="${encodeURIComponent(flowchartCode)}"`);
+      expect(html).toContain('class="mermaid-fallback"');
+      expect(html).toContain('Start --&gt; Stop');
+    });
+
+    it('handles case-insensitive mermaid language identifiers', () => {
+      const code = 'graph LR\n  X --> Y';
+      const input = `\`\`\`MERMAID\n${code}\n\`\`\``;
+      const html = parseMarkdown(input);
+
+      expect(html).toContain('class="mermaid-diagram"');
+      expect(html).toContain(`data-mermaid="${encodeURIComponent(code)}"`);
     });
   });
 
@@ -108,6 +143,30 @@ describe('Markdown Parser & Sanitizer: app/utils/markdown.ts', () => {
       expect(html).not.toContain('<iframe');
       expect(html).not.toContain('<embed');
       expect(html).not.toContain('<form');
+    });
+
+    it('retains valid SVG elements and attributes', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" /><text x="50" y="50">Label</text></svg>';
+      const html = parseMarkdown(svgContent);
+      expect(html).toContain('<svg');
+      expect(html).toContain('<circle');
+      expect(html).toContain('<text');
+    });
+  });
+
+  describe('HTML Escaping: escapeHtml', () => {
+    it('escapes special characters correctly', () => {
+      expect(escapeHtml('<script>alert("XSS" & \'test\')</script>')).toBe(
+        '&lt;script&gt;alert(&quot;XSS&quot; &amp; &#39;test&#39;)&lt;/script&gt;'
+      );
+    });
+
+    it('handles empty or non-string input safely', () => {
+      expect(escapeHtml('')).toBe('');
+      // @ts-expect-error test non-string input
+      expect(escapeHtml(null)).toBe('');
+      // @ts-expect-error test non-string input
+      expect(escapeHtml(undefined)).toBe('');
     });
   });
 
