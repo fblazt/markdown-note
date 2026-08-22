@@ -1,5 +1,8 @@
 import { ref, computed, watch } from 'vue';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo, FolderTreeNode, SaveStatus } from '../../shared/types/note';
+import { useStorageQuota } from './useStorageQuota';
+import { useToast } from './useToast';
+import { exportNoteJson, downloadBlob } from '../utils/export';
 import {
   getAllNotes,
   getAllFolders,
@@ -12,6 +15,28 @@ import {
   deleteNote as dbDeleteNote,
   seedInitialData,
 } from '../utils/db';
+
+function isQuotaExceededError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === 'object') {
+    const e = err as any;
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      return true;
+    }
+    if (
+      typeof e.message === 'string' &&
+      (e.message.includes('QuotaExceeded') ||
+        e.message.includes('quota') ||
+        e.message.includes('exceeded'))
+    ) {
+      return true;
+    }
+    if (e.code === 22 || e.number === -2147024882) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const getInitialExpandedFolders = (): string[] => {
   if (typeof localStorage !== 'undefined') {
@@ -102,6 +127,24 @@ async function updateNoteStandalone(id: string, dto: UpdateNoteDTO): Promise<Not
   } catch (err) {
     console.error(`Failed to update note ${id}:`, err);
     saveStatus.value = 'error';
+    if (isQuotaExceededError(err)) {
+      const { setStorageExceeded } = useStorageQuota();
+      const { showToast } = useToast();
+      setStorageExceeded();
+      showToast({
+        title: 'Storage Quota Exceeded',
+        message: 'Could not save note because browser storage is full. Please export a backup.',
+        type: 'danger',
+        duration: 0,
+        action: {
+          label: 'Export Backup',
+          onClick: () => {
+            const content = exportNoteJson(notes.value);
+            downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+          },
+        },
+      });
+    }
     return null;
   } finally {
     isSaving.value = false;
@@ -633,6 +676,29 @@ export function useNotes() {
   async function createNote(dto?: Partial<CreateNoteDTO>): Promise<Note | null> {
     flushAutoSave();
     isLoading.value = true;
+
+    // Check storage quota status before creating
+    try {
+      const { checkQuota } = useStorageQuota();
+      const { showToast } = useToast();
+      const quota = await checkQuota();
+      if (quota.status === 'warning' || quota.status === 'critical') {
+        const percent = Math.round(quota.percentage);
+        showToast({
+          title: quota.status === 'critical' ? 'Storage space critical' : 'Storage limit near',
+          message: `Storage is ${percent}% used (${quota.formattedRemaining} remaining).`,
+          type: quota.status === 'critical' ? 'danger' : 'warning',
+          action: {
+            label: 'Export Backup',
+            onClick: () => {
+              const content = exportNoteJson(notes.value);
+              downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+            },
+          },
+        });
+      }
+    } catch {}
+
     try {
       let folderVal = dto?.folder;
       if (folderVal === undefined && selectedFolder.value && selectedFolder.value !== '__root__') {
@@ -673,6 +739,24 @@ export function useNotes() {
     } catch (err) {
       console.error('Failed to create note:', err);
       saveStatus.value = 'error';
+      if (isQuotaExceededError(err)) {
+        const { setStorageExceeded } = useStorageQuota();
+        const { showToast } = useToast();
+        setStorageExceeded();
+        showToast({
+          title: 'Storage Quota Exceeded',
+          message: 'Could not create note because browser storage is full. Please export a backup.',
+          type: 'danger',
+          duration: 0,
+          action: {
+            label: 'Export Backup',
+            onClick: () => {
+              const content = exportNoteJson(notes.value);
+              downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+            },
+          },
+        });
+      }
       return null;
     } finally {
       isLoading.value = false;
@@ -713,6 +797,24 @@ export function useNotes() {
     } catch (err) {
       console.error(`Failed to update note ${id}:`, err);
       saveStatus.value = 'error';
+      if (isQuotaExceededError(err)) {
+        const { setStorageExceeded } = useStorageQuota();
+        const { showToast } = useToast();
+        setStorageExceeded();
+        showToast({
+          title: 'Storage Quota Exceeded',
+          message: 'Could not save note because browser storage is full. Please export a backup.',
+          type: 'danger',
+          duration: 0,
+          action: {
+            label: 'Export Backup',
+            onClick: () => {
+              const content = exportNoteJson(notes.value);
+              downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+            },
+          },
+        });
+      }
       return null;
     } finally {
       isSaving.value = false;
@@ -752,6 +854,10 @@ export function useNotes() {
         }
       }
       await fetchFolders();
+      try {
+        const { checkQuota } = useStorageQuota();
+        await checkQuota();
+      } catch {}
       return true;
     } catch (err) {
       console.error(`Failed to delete note ${id}:`, err);

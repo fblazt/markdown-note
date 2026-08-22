@@ -324,6 +324,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Storage Quota Widget -->
+    <StorageQuotaIndicator />
   </aside>
 </template>
 
@@ -349,6 +352,7 @@ import { useNotes } from '../composables/useNotes';
 import { useConfirm } from '../composables/useConfirm';
 import { exportNoteJson, exportCombinedMarkdown, downloadBlob } from '../utils/export';
 import FolderTreeNodeItem from './FolderTreeNodeItem.vue';
+import StorageQuotaIndicator from './StorageQuotaIndicator.vue';
 import type { Note } from '../../shared/types/note';
 
 const {

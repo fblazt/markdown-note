@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotes } from '../../app/composables/useNotes';
+import { useToast } from '../../app/composables/useToast';
+import { useStorageQuota } from '../../app/composables/useStorageQuota';
 import { resetDb, getNoteById, getAllFolders, getAllNotes } from '../../app/utils/db';
+import * as dbUtils from '../../app/utils/db';
 
 describe('Composable: useNotes', () => {
   let composable: ReturnType<typeof useNotes>;
@@ -432,4 +435,56 @@ describe('Composable: useNotes', () => {
       expect(parsed).not.toContain('Guides');
     });
   });
+
+  describe('Storage Quota Revalidation & Alerts', () => {
+    it('triggers warning toast when creating note while storage is near limit', async () => {
+      const { toasts, clearAllToasts } = useToast();
+      clearAllToasts();
+
+      const mockStorage = {
+        estimate: vi.fn().mockResolvedValue({
+          usage: 850 * 1024 * 1024,
+          quota: 1024 * 1024 * 1024,
+        }),
+        persisted: vi.fn().mockResolvedValue(false),
+      };
+      vi.stubGlobal('navigator', { storage: mockStorage });
+
+      const created = await composable.createNote({ title: 'Note near limit' });
+      expect(created).not.toBeNull();
+      expect(toasts.value.length).toBeGreaterThan(0);
+      expect(toasts.value[0]?.title).toContain('Storage');
+      expect(toasts.value[0]?.type).toBe('warning');
+    });
+
+    it('sets saveStatus to error, marks quota as exceeded, and shows danger toast on QuotaExceededError', async () => {
+      const { toasts, clearAllToasts } = useToast();
+      const { quotaInfo } = useStorageQuota();
+      clearAllToasts();
+
+      const quotaError = new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      vi.spyOn(dbUtils, 'updateNote').mockRejectedValueOnce(quotaError);
+
+      const result = await composable.updateNote('seed-welcome-guide', { content: 'Exceeding content' });
+      expect(result).toBeNull();
+      expect(composable.saveStatus.value).toBe('error');
+      expect(quotaInfo.value.status).toBe('exceeded');
+      expect(toasts.value.some((t) => t.type === 'danger' && t.title.includes('Quota Exceeded'))).toBe(true);
+    });
+
+    it('triggers storage quota refresh on note deletion', async () => {
+      const mockStorage = {
+        estimate: vi.fn().mockResolvedValue({
+          usage: 50 * 1024 * 1024,
+          quota: 1024 * 1024 * 1024,
+        }),
+        persisted: vi.fn().mockResolvedValue(true),
+      };
+      vi.stubGlobal('navigator', { storage: mockStorage });
+
+      await composable.deleteNote('seed-welcome-guide');
+      expect(mockStorage.estimate).toHaveBeenCalled();
+    });
+  });
 });
+

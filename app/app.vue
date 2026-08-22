@@ -93,30 +93,34 @@
       <!-- Sidebar Pane (List View) -->
       <NoteSidebar />
 
-      <!-- Workspace Panel Area with Smooth Transitions -->
-      <div class="workspace-panels">
-        <!-- Editor Panel -->
-        <div
-          class="panel-container panel-editor"
-          :class="{
-            'panel-active': isEditorActive,
-            'panel-collapsed': !isEditorActive,
-          }"
-          :aria-hidden="!isEditorActive"
-        >
-          <NoteEditor />
-        </div>
+      <!-- Workspace Area with Alert Banner & Panels -->
+      <div class="workspace-area">
+        <StorageAlertBanner />
 
-        <!-- Preview Panel -->
-        <div
-          class="panel-container panel-preview"
-          :class="{
-            'panel-active': isPreviewActive,
-            'panel-collapsed': !isPreviewActive,
-          }"
-          :aria-hidden="!isPreviewActive"
-        >
-          <NotePreview />
+        <div class="workspace-panels">
+          <!-- Editor Panel -->
+          <div
+            class="panel-container panel-editor"
+            :class="{
+              'panel-active': isEditorActive,
+              'panel-collapsed': !isEditorActive,
+            }"
+            :aria-hidden="!isEditorActive"
+          >
+            <NoteEditor />
+          </div>
+
+          <!-- Preview Panel -->
+          <div
+            class="panel-container panel-preview"
+            :class="{
+              'panel-active': isPreviewActive,
+              'panel-collapsed': !isPreviewActive,
+            }"
+            :aria-hidden="!isPreviewActive"
+          >
+            <NotePreview />
+          </div>
         </div>
       </div>
     </main>
@@ -131,12 +135,23 @@
       </div>
 
       <div class="status-right">
+        <span
+          v-if="quotaInfo.isSupported"
+          class="status-storage-summary"
+          :class="`status-quota-${quotaInfo.status}`"
+        >
+          <HardDrive :size="12" />
+          <span>{{ quotaInfo.formattedUsage }} / {{ quotaInfo.formattedQuota }} ({{ Math.round(quotaInfo.percentage) }}%)</span>
+        </span>
         <span class="status-notes-total">{{ notes.length }} notes</span>
       </div>
     </footer>
 
     <!-- Global Confirmation Dialog Modal -->
     <ConfirmDialog />
+
+    <!-- Global Toast Notifications -->
+    <ToastContainer />
   </div>
 </template>
 
@@ -150,14 +165,18 @@ import {
   Eye,
   Plus,
   ChevronLeft,
+  HardDrive,
 } from 'lucide-vue-next';
 import { useNotes } from './composables/useNotes';
 import { useTheme } from './composables/useTheme';
+import { useStorageQuota } from './composables/useStorageQuota';
 import NoteSidebar from './components/NoteSidebar.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import NotePreview from './components/NotePreview.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import ToastContainer from './components/ToastContainer.vue';
+import StorageAlertBanner from './components/StorageAlertBanner.vue';
 
 const {
   notes,
@@ -172,6 +191,8 @@ const {
   navigateBackToList,
   checkMobile,
 } = useNotes();
+
+const { quotaInfo } = useStorageQuota();
 
 const isEditorActive = computed(() => {
   if (isMobile.value) {
@@ -344,7 +365,35 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* Workspace Panels & Transition Layout */
+.status-storage-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.status-quota-warning {
+  color: var(--accent-warning);
+}
+
+.status-quota-critical,
+.status-quota-exceeded {
+  color: var(--accent-danger);
+}
+
+/* Workspace Area, Panels & Transition Layout */
+.workspace-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
 .workspace-panels {
   display: flex;
   flex: 1;
@@ -443,6 +492,9 @@ onUnmounted(() => {
   .status-active-note {
     max-width: 180px;
   }
+  .status-storage-summary {
+    display: none;
+  }
   .new-note-label {
     display: none;
   }
@@ -451,9 +503,18 @@ onUnmounted(() => {
     padding: 0.45rem 0.65rem;
   }
 
-  .workspace-panels {
+  .workspace-area {
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .workspace-panels {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
   }
 
   .panel-container {
