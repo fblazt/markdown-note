@@ -3,9 +3,7 @@
     <!-- Sidebar Header -->
     <div class="sidebar-header">
       <div class="sidebar-title-group">
-        <FileText class="icon-brand" :size="16" />
-        <h2>Notes</h2>
-        <span class="notes-count-badge">{{ notes.length }}</span>
+        <h2>Explorer</h2>
       </div>
 
       <div class="sidebar-header-actions">
@@ -784,34 +782,18 @@ function formatDate(isoString: string): string {
 .sidebar-title-group {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
   min-width: 0;
 }
 
 .sidebar-title-group h2 {
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.icon-brand {
-  color: var(--accent-primary);
-  flex-shrink: 0;
-}
-
-.notes-count-badge {
-  background-color: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 0.65rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  border: 1px solid var(--border-subtle);
-  flex-shrink: 0;
 }
 
 .sidebar-header-actions {

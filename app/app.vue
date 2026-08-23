@@ -29,7 +29,6 @@
         </button>
 
         <div class="brand">
-          <FileCode :size="20" class="brand-icon" />
           <span class="brand-name">Markdown Notes</span>
         </div>
       </div>
@@ -158,7 +157,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import {
-  FileCode,
   PanelLeft,
   Columns2,
   PenLine,
@@ -286,10 +284,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.brand-icon {
-  color: var(--accent-primary);
 }
 
 .brand-name {
