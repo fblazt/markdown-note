@@ -1,7 +1,9 @@
 import 'fake-indexeddb/auto';
 
 // Global test setup for Nuxt environment
+(globalThis as any).defineNuxtConfig = (fnOrConfig: any) => typeof fnOrConfig === 'function' ? fnOrConfig() : fnOrConfig;
 (globalThis as any).defineEventHandler = (fn: any) => fn;
+
 
 (globalThis as any).getRouterParam = (event: any, name: string) => {
   return event.context?.params?.[name];

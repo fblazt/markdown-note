@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "22.13.14",
+    "@vite-pwa/nuxt": "1.1.1",
     "@vue/test-utils": "2.4.11",
     "fake-indexeddb": "6.2.5",
     "happy-dom": "16.8.1",
