@@ -234,7 +234,8 @@ html, body {
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 1rem;
   padding: 0.35rem 1.25rem;
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
   padding-left: max(1rem, env(safe-area-inset-left));

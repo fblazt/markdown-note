@@ -126,22 +126,27 @@
 
     <!-- Footer / Status Bar -->
     <footer class="status-bar">
-      <div class="status-left">
-        <span v-if="activeNote" class="status-active-note">
-          Editing: <strong>{{ activeNote.title || 'Untitled Note' }}</strong>
-        </span>
-        <span v-else>No note selected</span>
-      </div>
-
       <div class="status-right">
-        <span
-          v-if="quotaInfo.isSupported"
-          class="status-storage-summary"
-          :class="`status-quota-${quotaInfo.status}`"
-        >
-          <HardDrive :size="12" />
-          <span>{{ quotaInfo.formattedUsage }} / {{ quotaInfo.formattedQuota }} ({{ Math.round(quotaInfo.percentage) }}%)</span>
-        </span>
+        <template v-if="activeNote">
+          <span class="status-stat">{{ wordCount }} {{ wordCount === 1 ? 'word' : 'words' }}</span>
+          <span class="status-separator status-stat-extra">•</span>
+          <span class="status-stat status-stat-extra">{{ charCount }} {{ charCount === 1 ? 'char' : 'chars' }}</span>
+          <span class="status-separator status-stat-extra">•</span>
+          <span class="status-stat status-stat-extra">~{{ readingTime }} min read</span>
+          <span class="status-separator">•</span>
+        </template>
+
+        <template v-if="quotaInfo.isSupported">
+          <span
+            class="status-storage-summary"
+            :class="`status-quota-${quotaInfo.status}`"
+          >
+            <HardDrive :size="12" />
+            <span>{{ quotaInfo.formattedUsage }} / {{ quotaInfo.formattedQuota }} ({{ Math.round(quotaInfo.percentage) }}%)</span>
+          </span>
+          <span class="status-separator status-storage-separator">•</span>
+        </template>
+
         <span class="status-notes-total">{{ notes.length }} notes</span>
       </div>
     </footer>
@@ -168,6 +173,7 @@ import {
 import { useNotes } from './composables/useNotes';
 import { useTheme } from './composables/useTheme';
 import { useStorageQuota } from './composables/useStorageQuota';
+import { getWordCount, getCharCount, getReadingTime } from './utils/markdown';
 import NoteSidebar from './components/NoteSidebar.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import NotePreview from './components/NotePreview.vue';
@@ -204,6 +210,18 @@ const isPreviewActive = computed(() => {
     return !isSidebarOpen.value && effectiveViewMode.value === 'preview';
   }
   return effectiveViewMode.value === 'split' || effectiveViewMode.value === 'preview';
+});
+
+const wordCount = computed(() => {
+  return activeNote.value ? getWordCount(activeNote.value.content) : 0;
+});
+
+const charCount = computed(() => {
+  return activeNote.value ? getCharCount(activeNote.value.content) : 0;
+});
+
+const readingTime = computed(() => {
+  return activeNote.value ? getReadingTime(activeNote.value.content) : 0;
 });
 
 const { initTheme } = useTheme();
@@ -333,29 +351,38 @@ onUnmounted(() => {
   gap: 0.6rem;
 }
 
-.status-left,
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
 .status-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-active-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 250px;
+.status-separator {
+  color: var(--border-subtle);
+  font-size: 0.65rem;
+  user-select: none;
 }
 
-.status-active-note strong {
+.status-stat {
+  font-weight: 500;
   color: var(--text-secondary);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .status-notes-total {
   font-weight: 500;
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 
@@ -363,7 +390,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.725rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -483,11 +510,15 @@ onUnmounted(() => {
   .header-toggle-sidebar {
     display: none;
   }
-  .status-active-note {
-    max-width: 180px;
+  .status-bar {
+    justify-content: flex-end;
   }
-  .status-storage-summary {
-    display: none;
+  .status-storage-summary,
+  .status-storage-separator {
+    display: none !important;
+  }
+  .status-stat-extra {
+    display: none !important;
   }
   .new-note-label {
     display: none;

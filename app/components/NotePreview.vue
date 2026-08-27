@@ -41,21 +41,6 @@
         <p>No content to preview</p>
       </div>
     </div>
-
-    <!-- Reading Stats Bar -->
-    <div class="preview-stats-bar">
-      <span class="stat-item">
-        <strong>{{ wordCount }}</strong> words
-      </span>
-      <span class="stat-divider">•</span>
-      <span class="stat-item">
-        <strong>{{ charCount }}</strong> characters
-      </span>
-      <span class="stat-divider">•</span>
-      <span class="stat-item">
-        <strong>~{{ readingTime }}</strong> min read
-      </span>
-    </div>
   </div>
 
   <div v-else class="preview-empty-state">
@@ -68,7 +53,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Eye, Copy, Check, Code } from 'lucide-vue-next';
 import { useNotes } from '../composables/useNotes';
 import { useTheme } from '../composables/useTheme';
-import { parseMarkdown, getWordCount, getCharCount, getReadingTime, escapeHtml } from '../utils/markdown';
+import { parseMarkdown, escapeHtml } from '../utils/markdown';
 import { renderMermaidDiagram } from '../utils/mermaid';
 import ExportDropdown from './ExportDropdown.vue';
 
@@ -81,18 +66,6 @@ const copiedHtml = ref(false);
 const renderedHtml = computed(() => {
   if (!activeNote.value || !activeNote.value.content) return '';
   return parseMarkdown(activeNote.value.content);
-});
-
-const wordCount = computed(() => {
-  return activeNote.value ? getWordCount(activeNote.value.content) : 0;
-});
-
-const charCount = computed(() => {
-  return activeNote.value ? getCharCount(activeNote.value.content) : 0;
-});
-
-const readingTime = computed(() => {
-  return activeNote.value ? getReadingTime(activeNote.value.content) : 0;
 });
 
 async function renderAllDiagrams() {
@@ -251,26 +224,6 @@ async function copyHtml() {
   font-size: 0.9rem;
 }
 
-.preview-stats-bar {
-  padding: 0.4rem 1.25rem;
-  background-color: var(--bg-sidebar);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.stat-item strong {
-  color: var(--text-secondary);
-}
-
-.stat-divider {
-  color: var(--border-subtle);
-}
-
 .preview-empty-state {
   flex: 1;
   display: flex;
@@ -294,12 +247,6 @@ async function copyHtml() {
 
   .preview-scroll-container {
     padding: 1rem 1.15rem;
-  }
-
-  .preview-stats-bar {
-    padding: 0.45rem 1rem;
-    font-size: 0.7rem;
-    gap: 0.4rem;
   }
 }
 </style>
