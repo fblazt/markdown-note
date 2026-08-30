@@ -6,6 +6,11 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
   },
+  runtimeConfig: {
+    public: {
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '',
+    },
+  },
   modules: ['@vite-pwa/nuxt'],
   pwa: {
     registerType: 'autoUpdate',
