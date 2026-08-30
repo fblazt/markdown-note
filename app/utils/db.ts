@@ -1,9 +1,15 @@
 import { Dexie, type Table } from 'dexie';
-import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo } from '../../shared/types/note';
+import type {
+  Note,
+  CreateNoteDTO,
+  UpdateNoteDTO,
+  FolderInfo,
+  FolderRecord,
+  SyncMutation,
+  SyncMeta,
+} from '../../shared/types/note';
 
-export interface FolderRecord {
-  name: string;
-}
+export type { Note, FolderRecord, SyncMutation, SyncMeta };
 
 export const INITIAL_FOLDERS = ['Guides', 'Projects', 'Code'];
 
@@ -96,6 +102,8 @@ flowchart LR
     folder: 'Guides',
     createdAt: '2025-01-01T08:00:00.000Z',
     updatedAt: '2025-01-01T08:00:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
   },
   {
     id: 'seed-project-roadmap',
@@ -137,6 +145,8 @@ flowchart TD
     folder: 'Projects',
     createdAt: '2025-01-02T10:30:00.000Z',
     updatedAt: '2025-01-02T11:00:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
   },
   {
     id: 'seed-code-snippets',
@@ -180,18 +190,47 @@ export default defineEventHandler(async (event) => {
     folder: 'Code',
     createdAt: '2025-01-03T14:15:00.000Z',
     updatedAt: '2025-01-03T14:15:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
   },
 ];
 
 export class NotesDatabase extends Dexie {
   notes!: Table<Note, string>;
   folders!: Table<FolderRecord, string>;
+  mutationQueue!: Table<SyncMutation, string>;
+  syncMeta!: Table<SyncMeta, string>;
 
-  constructor() {
-    super('MarkdownNotesDB');
+  constructor(databaseName = 'MarkdownNotesDB') {
+    super(databaseName);
     this.version(1).stores({
       notes: 'id, title, folder, *tags, createdAt, updatedAt',
       folders: 'name',
+    });
+
+    this.version(2).stores({
+      notes: 'id, title, folder, *tags, createdAt, updatedAt, deletedAt, syncStatus',
+      folders: 'name, deletedAt, syncStatus',
+      mutationQueue: 'id, entityType, entityId, action, createdAt',
+      syncMeta: 'key',
+    }).upgrade(async (tx) => {
+      await tx.table('notes').toCollection().modify((note) => {
+        if (!note.syncStatus) note.syncStatus = 'pending';
+        if (note.deletedAt === undefined) note.deletedAt = null;
+      });
+      await tx.table('folders').toCollection().modify((folder) => {
+        if (!folder.syncStatus) folder.syncStatus = 'pending';
+        if (folder.deletedAt === undefined) folder.deletedAt = null;
+      });
+    });
+  }
+
+  async clearAllUserData(): Promise<void> {
+    await this.transaction('rw', [this.notes, this.folders, this.mutationQueue, this.syncMeta], async () => {
+      await this.notes.clear();
+      await this.folders.clear();
+      await this.mutationQueue.clear();
+      await this.syncMeta.clear();
     });
   }
 }
@@ -211,11 +250,11 @@ export async function seedInitialData(): Promise<void> {
   const notesCount = await db.notes.count();
   const foldersCount = await db.folders.count();
   if (notesCount === 0 && foldersCount === 0) {
-    await db.transaction('rw', db.notes, db.folders, async () => {
+    await db.transaction('rw', [db.notes, db.folders], async () => {
       const nc = await db.notes.count();
       const fc = await db.folders.count();
       if (nc === 0 && fc === 0) {
-        await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name })));
+        await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name, deletedAt: null, syncStatus: 'synced' })));
         await db.notes.bulkAdd(SEED_NOTES);
       }
     });
@@ -545,10 +584,12 @@ export async function deleteNote(id: string): Promise<boolean> {
 }
 
 export async function resetDb(): Promise<void> {
-  await db.transaction('rw', db.notes, db.folders, async () => {
+  await db.transaction('rw', [db.notes, db.folders, db.mutationQueue, db.syncMeta], async () => {
     await db.notes.clear();
     await db.folders.clear();
-    await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name })));
+    await db.mutationQueue.clear();
+    await db.syncMeta.clear();
+    await db.folders.bulkAdd(INITIAL_FOLDERS.map((name) => ({ name, deletedAt: null, syncStatus: 'synced' })));
     await db.notes.bulkAdd(SEED_NOTES);
   });
 }

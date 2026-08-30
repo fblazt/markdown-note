@@ -6,6 +6,29 @@ export interface Note {
   folder?: string;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  deletedAt?: string | null;
+  syncStatus?: 'synced' | 'pending' | 'conflict';
+}
+
+export interface FolderRecord {
+  name: string;
+  deletedAt?: string | null;
+  syncStatus?: 'synced' | 'pending';
+}
+
+export interface SyncMutation {
+  id: string;
+  entityType: 'note' | 'folder';
+  entityId: string;
+  action: 'upsert' | 'delete';
+  data: Partial<Note> | Partial<FolderRecord>;
+  baseUpdatedAt?: string | null;
+  createdAt: string;
+}
+
+export interface SyncMeta {
+  key: string;
+  value: string;
 }
 
 export interface CreateNoteDTO {
@@ -49,4 +72,3 @@ export interface MoveFolderDTO {
 }
 
 export type SaveStatus = 'idle' | 'saved' | 'saving' | 'unsaved' | 'error';
-

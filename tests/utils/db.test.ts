@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import Dexie from 'dexie';
 import {
   db,
+  NotesDatabase,
   getAllNotes,
   getNoteById,
   createNote,
@@ -17,6 +19,7 @@ import {
   INITIAL_FOLDERS,
   SEED_NOTES,
 } from '../../app/utils/db';
+import type { SyncMutation, SyncMeta } from '../../shared/types/note';
 
 describe('Database Utility (Dexie client-side IndexedDB)', () => {
   beforeEach(async () => {
@@ -34,14 +37,31 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
   });
 
   describe('Database Seeding & Reset', () => {
-    it('populates initial seed notes and folders on resetDb', async () => {
+    it('populates initial seed notes and folders with syncStatus synced and deletedAt null on resetDb', async () => {
       const notes = await getAllNotes();
       const folders = await getAllFolders();
+      const folderRecords = await db.folders.toArray();
 
       expect(notes.length).toBe(SEED_NOTES.length);
+      for (const note of notes) {
+        expect(note.deletedAt).toBeNull();
+        expect(note.syncStatus).toBe('synced');
+      }
+
       expect(folders.some((f) => f.name === 'Guides')).toBe(true);
       expect(folders.some((f) => f.name === 'Projects')).toBe(true);
       expect(folders.some((f) => f.name === 'Code')).toBe(true);
+
+      for (const folder of folderRecords) {
+        expect(folder.deletedAt).toBeNull();
+        expect(folder.syncStatus).toBe('synced');
+      }
+
+      // mutationQueue and syncMeta must be empty
+      const mutations = await db.mutationQueue.toArray();
+      const meta = await db.syncMeta.toArray();
+      expect(mutations.length).toBe(0);
+      expect(meta.length).toBe(0);
     });
 
     it('seedInitialData does not overwrite existing data when db is not empty', async () => {
@@ -51,6 +71,206 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       await seedInitialData();
       const afterCount = (await getAllNotes()).length;
       expect(afterCount).toBe(initialCount);
+    });
+  });
+
+  describe('Version 2 Schema & Tables', () => {
+    it('provides mutationQueue table for storing and retrieving SyncMutation records', async () => {
+      expect(db.mutationQueue).toBeDefined();
+
+      const noteMutation: SyncMutation = {
+        id: 'mut-note-1',
+        entityType: 'note',
+        entityId: 'note-123',
+        action: 'upsert',
+        data: {
+          id: 'note-123',
+          title: 'Queued Note',
+          content: 'Queued Content',
+          syncStatus: 'pending',
+          deletedAt: null,
+        },
+        baseUpdatedAt: null,
+        createdAt: '2026-08-30T10:00:00.000Z',
+      };
+
+      const folderMutation: SyncMutation = {
+        id: 'mut-folder-1',
+        entityType: 'folder',
+        entityId: 'Work/Docs',
+        action: 'delete',
+        data: {
+          name: 'Work/Docs',
+          deletedAt: '2026-08-30T10:05:00.000Z',
+          syncStatus: 'pending',
+        },
+        baseUpdatedAt: '2026-08-30T09:00:00.000Z',
+        createdAt: '2026-08-30T10:05:00.000Z',
+      };
+
+      await db.mutationQueue.add(noteMutation);
+      await db.mutationQueue.add(folderMutation);
+
+      expect(await db.mutationQueue.count()).toBe(2);
+
+      const retrievedNoteMut = await db.mutationQueue.get('mut-note-1');
+      expect(retrievedNoteMut).toEqual(noteMutation);
+
+      const retrievedFolderMut = await db.mutationQueue.get('mut-folder-1');
+      expect(retrievedFolderMut).toEqual(folderMutation);
+
+      await db.mutationQueue.delete('mut-note-1');
+      expect(await db.mutationQueue.count()).toBe(1);
+    });
+
+    it('provides syncMeta table for storing and retrieving key-value metadata', async () => {
+      expect(db.syncMeta).toBeDefined();
+
+      const lastSync: SyncMeta = {
+        key: 'lastSyncedAt',
+        value: '2026-08-30T12:00:00.000Z',
+      };
+      const syncCursor: SyncMeta = {
+        key: 'syncCursor',
+        value: 'cursor_abc123',
+      };
+
+      await db.syncMeta.put(lastSync);
+      await db.syncMeta.put(syncCursor);
+
+      expect(await db.syncMeta.count()).toBe(2);
+
+      const fetchedSync = await db.syncMeta.get('lastSyncedAt');
+      expect(fetchedSync).toEqual(lastSync);
+
+      const fetchedCursor = await db.syncMeta.get('syncCursor');
+      expect(fetchedCursor).toEqual(syncCursor);
+
+      // Overwrite existing key
+      await db.syncMeta.put({ key: 'lastSyncedAt', value: '2026-08-30T13:00:00.000Z' });
+      const updated = await db.syncMeta.get('lastSyncedAt');
+      expect(updated?.value).toBe('2026-08-30T13:00:00.000Z');
+      expect(await db.syncMeta.count()).toBe(2);
+    });
+
+    it('clearAllUserData clears all 4 tables without reseeding', async () => {
+      // Ensure seed notes and folders exist
+      expect(await db.notes.count()).toBeGreaterThan(0);
+      expect(await db.folders.count()).toBeGreaterThan(0);
+
+      // Add records into mutationQueue and syncMeta
+      await db.mutationQueue.add({
+        id: 'mut-clear-test',
+        entityType: 'note',
+        entityId: 'note-xyz',
+        action: 'upsert',
+        data: { title: 'To Clear' },
+        createdAt: '2026-08-30T00:00:00.000Z',
+      });
+      await db.syncMeta.put({
+        key: 'syncStatus',
+        value: 'active',
+      });
+
+      expect(await db.mutationQueue.count()).toBe(1);
+      expect(await db.syncMeta.count()).toBe(1);
+
+      // Call clearAllUserData
+      await db.clearAllUserData();
+
+      expect(await db.notes.count()).toBe(0);
+      expect(await db.folders.count()).toBe(0);
+      expect(await db.mutationQueue.count()).toBe(0);
+      expect(await db.syncMeta.count()).toBe(0);
+    });
+  });
+
+  describe('Version 2 Database Migration (v1 -> v2 upgrade)', () => {
+    it('applies version 2 upgrade hook to populate default syncStatus and deletedAt on legacy records', async () => {
+      const upgradeTestDbName = `test-db-upgrade-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      // Step 1: Initialize Database with Version 1 schema only
+      const dbV1 = new Dexie(upgradeTestDbName);
+      dbV1.version(1).stores({
+        notes: 'id, title, folder, *tags, createdAt, updatedAt',
+        folders: 'name',
+      });
+
+      await dbV1.open();
+
+      // Insert legacy v1 records without deletedAt or syncStatus
+      await dbV1.table('notes').bulkAdd([
+        {
+          id: 'v1-note-1',
+          title: 'Legacy Note 1',
+          content: 'Legacy content without sync fields',
+          tags: ['legacy'],
+          folder: 'LegacyFolder',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'v1-note-2',
+          title: 'Legacy Note 2 with Custom syncStatus',
+          content: 'Already has syncStatus',
+          tags: [],
+          createdAt: '2024-01-02T00:00:00.000Z',
+          updatedAt: '2024-01-02T00:00:00.000Z',
+          syncStatus: 'synced',
+          deletedAt: '2024-01-02T01:00:00.000Z',
+        },
+      ]);
+
+      await dbV1.table('folders').bulkAdd([
+        { name: 'LegacyFolder' },
+        { name: 'SyncedFolder', syncStatus: 'synced', deletedAt: null },
+      ]);
+
+      dbV1.close();
+
+      // Step 2: Open with NotesDatabase (which defines v1 + v2 with upgrade hook)
+      const dbV2 = new NotesDatabase(upgradeTestDbName);
+      await dbV2.open();
+
+      // Verify v1-note-1 received defaults: syncStatus = 'pending', deletedAt = null
+      const migratedNote1 = await dbV2.notes.get('v1-note-1');
+      expect(migratedNote1).toBeDefined();
+      expect(migratedNote1?.title).toBe('Legacy Note 1');
+      expect(migratedNote1?.syncStatus).toBe('pending');
+      expect(migratedNote1?.deletedAt).toBeNull();
+
+      // Verify v1-note-2 preserved its existing syncStatus and deletedAt
+      const migratedNote2 = await dbV2.notes.get('v1-note-2');
+      expect(migratedNote2).toBeDefined();
+      expect(migratedNote2?.syncStatus).toBe('synced');
+      expect(migratedNote2?.deletedAt).toBe('2024-01-02T01:00:00.000Z');
+
+      // Verify LegacyFolder received defaults: syncStatus = 'pending', deletedAt = null
+      const migratedFolder1 = await dbV2.folders.get('LegacyFolder');
+      expect(migratedFolder1).toBeDefined();
+      expect(migratedFolder1?.syncStatus).toBe('pending');
+      expect(migratedFolder1?.deletedAt).toBeNull();
+
+      // Verify SyncedFolder preserved its existing syncStatus
+      const migratedFolder2 = await dbV2.folders.get('SyncedFolder');
+      expect(migratedFolder2).toBeDefined();
+      expect(migratedFolder2?.syncStatus).toBe('synced');
+      expect(migratedFolder2?.deletedAt).toBeNull();
+
+      // Verify mutationQueue and syncMeta tables were created and accessible in v2
+      expect(dbV2.mutationQueue).toBeDefined();
+      expect(dbV2.syncMeta).toBeDefined();
+      await dbV2.mutationQueue.add({
+        id: 'mut-post-mig',
+        entityType: 'note',
+        entityId: 'v1-note-1',
+        action: 'upsert',
+        data: { title: 'Updated After Migration' },
+        createdAt: '2026-08-30T10:00:00.000Z',
+      });
+      expect(await dbV2.mutationQueue.count()).toBe(1);
+
+      await dbV2.delete();
     });
   });
 
