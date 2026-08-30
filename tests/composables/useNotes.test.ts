@@ -253,10 +253,78 @@ describe('Composable: useNotes', () => {
     expect(composable.saveStatus.value).toBe('saved');
   });
 
-  it('deletes note and selects remaining note', async () => {
+  it('deletes note and transitions to adjacent note using selectNextNote', async () => {
+    // Current notes: [seed-code-snippets, seed-project-roadmap, seed-welcome-guide]
+    expect(composable.notes.value.length).toBe(3);
+    const firstId = composable.notes.value[0]!.id;
+    const middleId = composable.notes.value[1]!.id;
+    const lastId = composable.notes.value[2]!.id;
+
+    // 1. Deleting middle active note should select next adjacent note (lastId)
+    composable.selectNote(middleId);
+    expect(composable.selectedNoteId.value).toBe(middleId);
+
+    await composable.deleteNote(middleId);
+    expect(composable.notes.value.some((n) => n.id === middleId)).toBe(false);
+    expect(composable.selectedNoteId.value).toBe(lastId);
+
+    // 2. Deleting last active note should select previous adjacent note (firstId)
+    await composable.deleteNote(lastId);
+    expect(composable.notes.value.some((n) => n.id === lastId)).toBe(false);
+    expect(composable.selectedNoteId.value).toBe(firstId);
+
+    // 3. Deleting single remaining active note should set selectedNoteId to null
+    await composable.deleteNote(firstId);
+    expect(composable.notes.value.length).toBe(0);
+    expect(composable.selectedNoteId.value).toBeNull();
+  });
+
+  it('selectNextNote transitions gracefully across notes list', () => {
+    expect(composable.notes.value.length).toBe(3);
+    const n0 = composable.notes.value[0]!.id;
+    const n1 = composable.notes.value[1]!.id;
+    const n2 = composable.notes.value[2]!.id;
+
+    // At index 0 -> advances to index 1
+    composable.selectNote(n0);
+    composable.selectNextNote();
+    expect(composable.selectedNoteId.value).toBe(n1);
+
+    // At index 1 -> advances to index 2
+    composable.selectNextNote();
+    expect(composable.selectedNoteId.value).toBe(n2);
+
+    // At index 2 (last) -> steps back to index 1
+    composable.selectNextNote();
+    expect(composable.selectedNoteId.value).toBe(n1);
+
+    // Empty list -> sets to null
+    composable.notes.value = [];
+    composable.selectNextNote();
+    expect(composable.selectedNoteId.value).toBeNull();
+  });
+
+  it('restoreNote restores a soft-deleted note, updates notes state, and selects it', async () => {
+    // Soft delete a note first
     await composable.deleteNote('seed-welcome-guide');
     expect(composable.notes.value.some((n) => n.id === 'seed-welcome-guide')).toBe(false);
-    expect(composable.selectedNoteId.value).not.toBe('seed-welcome-guide');
+
+    // Restore note
+    const restored = await composable.restoreNote('seed-welcome-guide');
+    expect(restored).not.toBeNull();
+    expect(restored?.id).toBe('seed-welcome-guide');
+    expect(restored?.deletedAt).toBeNull();
+    expect(restored?.syncStatus).toBe('pending');
+
+    // State updated
+    expect(composable.notes.value.some((n) => n.id === 'seed-welcome-guide')).toBe(true);
+    expect(composable.selectedNoteId.value).toBe('seed-welcome-guide');
+    expect(composable.expandedFolders.value.includes('Guides')).toBe(true);
+  });
+
+  it('restoreNote returns null if note does not exist', async () => {
+    const res = await composable.restoreNote('completely-bogus-id');
+    expect(res).toBeNull();
   });
 
   it('handles debounced auto-save queue with folder updates', async () => {

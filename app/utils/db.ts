@@ -287,22 +287,27 @@ export function normalizeFolderPath(path?: string): string {
 export async function getAllNotes(): Promise<Note[]> {
   await ensureSeeded();
   const notes = await db.notes.toArray();
-  return notes.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  return notes
+    .filter((n) => !n.deletedAt)
+    .sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
 }
 
 export async function getNoteById(id: string): Promise<Note | null> {
   await ensureSeeded();
   const note = await db.notes.get(id);
-  return note ? { ...note } : null;
+  if (!note || note.deletedAt) {
+    return null;
+  }
+  return { ...note };
 }
 
 export async function getAllFolders(): Promise<FolderInfo[]> {
   await ensureSeeded();
-  const folderRecords = await db.folders.toArray();
+  const folderRecords = (await db.folders.toArray()).filter((f) => !f.deletedAt);
   const allFolderNames = new Set<string>(folderRecords.map((f) => f.name));
-  const allNotes = await db.notes.toArray();
+  const allNotes = (await db.notes.toArray()).filter((n) => !n.deletedAt);
 
   for (const note of allNotes) {
     if (note.folder) {
@@ -333,17 +338,35 @@ export async function createFolder(path: string): Promise<boolean> {
     return false;
   }
   const existing = await db.folders.get(normalized);
-  if (existing) {
+  if (existing && !existing.deletedAt) {
     return false;
   }
 
+  const now = new Date().toISOString();
   // Auto-register intermediate parent paths
   const segments = normalized.split('/');
   let currentPath = '';
-  for (let i = 0; i < segments.length; i++) {
-    currentPath = currentPath ? `${currentPath}/${segments[i]}` : segments[i]!;
-    await db.folders.put({ name: currentPath });
-  }
+
+  await db.transaction('rw', [db.folders, db.mutationQueue], async () => {
+    for (let i = 0; i < segments.length; i++) {
+      currentPath = currentPath ? `${currentPath}/${segments[i]}` : segments[i]!;
+      const folderRec: FolderRecord = {
+        name: currentPath,
+        deletedAt: null,
+        syncStatus: 'pending',
+      };
+      await db.folders.put(folderRec);
+      await db.mutationQueue.add({
+        id: generateId(),
+        entityType: 'folder',
+        entityId: currentPath,
+        action: 'upsert',
+        data: folderRec,
+        baseUpdatedAt: null,
+        createdAt: now,
+      });
+    }
+  });
 
   return true;
 }
@@ -357,9 +380,9 @@ export async function renameFolder(oldPath: string, newPath: string): Promise<bo
     return false;
   }
 
-  const folderRecords = await db.folders.toArray();
+  const folderRecords = (await db.folders.toArray()).filter((f) => !f.deletedAt);
   const folderNames = new Set<string>(folderRecords.map((f) => f.name));
-  const allNotes = await db.notes.toArray();
+  const allNotes = (await db.notes.toArray()).filter((n) => !n.deletedAt);
 
   // Check if source folder exists (exact match or parent of subfolders/notes)
   const sourceExists =
@@ -389,9 +412,20 @@ export async function renameFolder(oldPath: string, newPath: string): Promise<bo
     }
   }
 
-  await db.transaction('rw', db.folders, db.notes, async () => {
+  const now = new Date().toISOString();
+
+  await db.transaction('rw', [db.folders, db.notes, db.mutationQueue], async () => {
     for (const f of foldersToRename) {
       await db.folders.delete(f);
+      await db.mutationQueue.add({
+        id: generateId(),
+        entityType: 'folder',
+        entityId: f,
+        action: 'delete',
+        data: { name: f, deletedAt: now, syncStatus: 'pending' },
+        createdAt: now,
+      });
+
       let renamed = normNew;
       if (f.startsWith(normOld + '/')) {
         renamed = normNew + f.slice(normOld.length);
@@ -401,7 +435,16 @@ export async function renameFolder(oldPath: string, newPath: string): Promise<bo
       let cur = '';
       for (const seg of segments) {
         cur = cur ? `${cur}/${seg}` : seg;
-        await db.folders.put({ name: cur });
+        const folderRec: FolderRecord = { name: cur, deletedAt: null, syncStatus: 'pending' };
+        await db.folders.put(folderRec);
+        await db.mutationQueue.add({
+          id: generateId(),
+          entityType: 'folder',
+          entityId: cur,
+          action: 'upsert',
+          data: folderRec,
+          createdAt: now,
+        });
       }
     }
 
@@ -410,20 +453,45 @@ export async function renameFolder(oldPath: string, newPath: string): Promise<bo
     let cur = '';
     for (const seg of newSegments) {
       cur = cur ? `${cur}/${seg}` : seg;
-      await db.folders.put({ name: cur });
+      const folderRec: FolderRecord = { name: cur, deletedAt: null, syncStatus: 'pending' };
+      await db.folders.put(folderRec);
+      await db.mutationQueue.add({
+        id: generateId(),
+        entityType: 'folder',
+        entityId: cur,
+        action: 'upsert',
+        data: folderRec,
+        createdAt: now,
+      });
     }
 
-    // Cascade to all notes
-    const now = new Date().toISOString();
+    // Cascade to all active notes
     for (const note of allNotes) {
+      let newFolder: string | undefined = undefined;
       if (note.folder === normOld) {
-        note.folder = normNew;
-        note.updatedAt = now;
-        await db.notes.put(note);
+        newFolder = normNew;
       } else if (note.folder && note.folder.startsWith(normOld + '/')) {
-        note.folder = normNew + note.folder.slice(normOld.length);
-        note.updatedAt = now;
-        await db.notes.put(note);
+        newFolder = normNew + note.folder.slice(normOld.length);
+      }
+
+      if (newFolder !== undefined) {
+        const baseUpdatedAt = note.updatedAt;
+        const updatedNote: Note = {
+          ...note,
+          folder: newFolder,
+          updatedAt: now,
+          syncStatus: 'pending',
+        };
+        await db.notes.put(updatedNote);
+        await db.mutationQueue.add({
+          id: generateId(),
+          entityType: 'note',
+          entityId: updatedNote.id,
+          action: 'upsert',
+          data: updatedNote,
+          baseUpdatedAt,
+          createdAt: now,
+        });
       }
     }
   });
@@ -438,9 +506,9 @@ export async function deleteFolder(path: string, deleteNotes = false): Promise<b
     return false;
   }
 
-  const folderRecords = await db.folders.toArray();
+  const folderRecords = (await db.folders.toArray()).filter((f) => !f.deletedAt);
   const folderNames = new Set<string>(folderRecords.map((f) => f.name));
-  const allNotes = await db.notes.toArray();
+  const allNotes = (await db.notes.toArray()).filter((n) => !n.deletedAt);
 
   const folderExists =
     folderNames.has(normPath) ||
@@ -458,25 +526,67 @@ export async function deleteFolder(path: string, deleteNotes = false): Promise<b
       toDelete.push(f);
     }
   }
+  if (!toDelete.includes(normPath)) {
+    toDelete.push(normPath);
+  }
 
-  await db.transaction('rw', db.folders, db.notes, async () => {
+  const now = new Date().toISOString();
+
+  await db.transaction('rw', [db.folders, db.notes, db.mutationQueue], async () => {
     for (const f of toDelete) {
       await db.folders.delete(f);
+      await db.mutationQueue.add({
+        id: generateId(),
+        entityType: 'folder',
+        entityId: f,
+        action: 'delete',
+        data: { name: f, deletedAt: now, syncStatus: 'pending' },
+        createdAt: now,
+      });
     }
 
     if (deleteNotes) {
       for (const note of allNotes) {
         if (note.folder === normPath || (note.folder && note.folder.startsWith(normPath + '/'))) {
-          await db.notes.delete(note.id);
+          const baseUpdatedAt = note.updatedAt;
+          const tombstone: Note = {
+            ...note,
+            deletedAt: now,
+            updatedAt: now,
+            syncStatus: 'pending',
+          };
+          await db.notes.put(tombstone);
+          await db.mutationQueue.add({
+            id: generateId(),
+            entityType: 'note',
+            entityId: tombstone.id,
+            action: 'delete',
+            data: tombstone,
+            baseUpdatedAt,
+            createdAt: now,
+          });
         }
       }
     } else {
-      const now = new Date().toISOString();
       for (const note of allNotes) {
         if (note.folder === normPath || (note.folder && note.folder.startsWith(normPath + '/'))) {
-          delete note.folder;
-          note.updatedAt = now;
-          await db.notes.put(note);
+          const baseUpdatedAt = note.updatedAt;
+          const unlinkedNote: Note = {
+            ...note,
+            updatedAt: now,
+            syncStatus: 'pending',
+          };
+          delete unlinkedNote.folder;
+          await db.notes.put(unlinkedNote);
+          await db.mutationQueue.add({
+            id: generateId(),
+            entityType: 'note',
+            entityId: unlinkedNote.id,
+            action: 'upsert',
+            data: unlinkedNote,
+            baseUpdatedAt,
+            createdAt: now,
+          });
         }
       }
     }
@@ -512,14 +622,6 @@ export async function createNote(dto: CreateNoteDTO): Promise<Note> {
   await ensureSeeded();
   const now = new Date().toISOString();
   const folder = dto.folder ? normalizeFolderPath(dto.folder) || undefined : undefined;
-  if (folder) {
-    const segs = folder.split('/');
-    let cur = '';
-    for (const s of segs) {
-      cur = cur ? `${cur}/${s}` : s;
-      await db.folders.put({ name: cur });
-    }
-  }
 
   const newNote: Note = {
     id: generateId(),
@@ -529,31 +631,57 @@ export async function createNote(dto: CreateNoteDTO): Promise<Note> {
     ...(folder ? { folder } : {}),
     createdAt: now,
     updatedAt: now,
+    deletedAt: null,
+    syncStatus: 'pending',
   };
-  await db.notes.add(newNote);
+
+  await db.transaction('rw', [db.notes, db.folders, db.mutationQueue], async () => {
+    if (folder) {
+      const segs = folder.split('/');
+      let cur = '';
+      for (const s of segs) {
+        cur = cur ? `${cur}/${s}` : s;
+        const folderRec: FolderRecord = { name: cur, deletedAt: null, syncStatus: 'pending' };
+        await db.folders.put(folderRec);
+        await db.mutationQueue.add({
+          id: generateId(),
+          entityType: 'folder',
+          entityId: cur,
+          action: 'upsert',
+          data: folderRec,
+          baseUpdatedAt: null,
+          createdAt: now,
+        });
+      }
+    }
+    await db.notes.add(newNote);
+    await db.mutationQueue.add({
+      id: generateId(),
+      entityType: 'note',
+      entityId: newNote.id,
+      action: 'upsert',
+      data: newNote,
+      baseUpdatedAt: null,
+      createdAt: now,
+    });
+  });
+
   return { ...newNote };
 }
 
 export async function updateNote(id: string, dto: UpdateNoteDTO): Promise<Note | null> {
   await ensureSeeded();
   const existing = await db.notes.get(id);
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     return null;
   }
 
   const now = new Date().toISOString();
+  const baseUpdatedAt = existing.updatedAt;
 
   let folder = existing.folder;
   if (dto.folder !== undefined) {
     folder = normalizeFolderPath(dto.folder) || undefined;
-    if (folder) {
-      const segs = folder.split('/');
-      let cur = '';
-      for (const s of segs) {
-        cur = cur ? `${cur}/${s}` : s;
-        await db.folders.put({ name: cur });
-      }
-    }
   }
 
   const updated: Note = {
@@ -563,24 +691,108 @@ export async function updateNote(id: string, dto: UpdateNoteDTO): Promise<Note |
     tags: dto.tags !== undefined ? (Array.isArray(dto.tags) ? [...dto.tags] : []) : existing.tags,
     createdAt: existing.createdAt,
     updatedAt: now,
+    deletedAt: null,
+    syncStatus: 'pending',
   };
 
   if (folder) {
     updated.folder = folder;
   }
 
-  await db.notes.put(updated);
+  await db.transaction('rw', [db.notes, db.folders, db.mutationQueue], async () => {
+    if (folder) {
+      const segs = folder.split('/');
+      let cur = '';
+      for (const s of segs) {
+        cur = cur ? `${cur}/${s}` : s;
+        const folderRec: FolderRecord = { name: cur, deletedAt: null, syncStatus: 'pending' };
+        await db.folders.put(folderRec);
+        await db.mutationQueue.add({
+          id: generateId(),
+          entityType: 'folder',
+          entityId: cur,
+          action: 'upsert',
+          data: folderRec,
+          baseUpdatedAt: null,
+          createdAt: now,
+        });
+      }
+    }
+    await db.notes.put(updated);
+    await db.mutationQueue.add({
+      id: generateId(),
+      entityType: 'note',
+      entityId: updated.id,
+      action: 'upsert',
+      data: updated,
+      baseUpdatedAt,
+      createdAt: now,
+    });
+  });
+
   return { ...updated };
 }
 
 export async function deleteNote(id: string): Promise<boolean> {
   await ensureSeeded();
   const existing = await db.notes.get(id);
-  if (!existing) {
+  if (!existing || existing.deletedAt) {
     return false;
   }
-  await db.notes.delete(id);
+
+  const now = new Date().toISOString();
+  const tombstone: Note = {
+    ...existing,
+    deletedAt: now,
+    updatedAt: now,
+    syncStatus: 'pending',
+  };
+
+  await db.transaction('rw', [db.notes, db.mutationQueue], async () => {
+    await db.notes.put(tombstone);
+    await db.mutationQueue.add({
+      id: generateId(),
+      entityType: 'note',
+      entityId: tombstone.id,
+      action: 'delete',
+      data: tombstone,
+      baseUpdatedAt: existing.updatedAt,
+      createdAt: now,
+    });
+  });
+
   return true;
+}
+
+export async function restoreNote(id: string): Promise<Note | null> {
+  await ensureSeeded();
+  const existing = await db.notes.get(id);
+  if (!existing) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  const restoredNote: Note = {
+    ...existing,
+    deletedAt: null,
+    updatedAt: now,
+    syncStatus: 'pending',
+  };
+
+  await db.transaction('rw', [db.notes, db.mutationQueue], async () => {
+    await db.notes.put(restoredNote);
+    await db.mutationQueue.add({
+      id: generateId(),
+      entityType: 'note',
+      entityId: restoredNote.id,
+      action: 'upsert',
+      data: restoredNote,
+      baseUpdatedAt: existing.updatedAt,
+      createdAt: now,
+    });
+  });
+
+  return { ...restoredNote };
 }
 
 export async function resetDb(): Promise<void> {

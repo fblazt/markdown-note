@@ -13,6 +13,7 @@ import {
   createNote as dbCreateNote,
   updateNote as dbUpdateNote,
   deleteNote as dbDeleteNote,
+  restoreNote as dbRestoreNote,
   seedInitialData,
 } from '../utils/db';
 
@@ -821,6 +822,27 @@ export function useNotes() {
     }
   }
 
+  function selectNextNote(): void {
+    if (notes.value.length === 0) {
+      selectNote(null);
+      return;
+    }
+
+    const currentIndex = notes.value.findIndex((n) => n.id === selectedNoteId.value);
+    if (currentIndex === -1) {
+      selectNote(notes.value[0]?.id || null);
+      return;
+    }
+
+    if (currentIndex + 1 < notes.value.length) {
+      selectNote(notes.value[currentIndex + 1]!.id);
+    } else if (currentIndex - 1 >= 0) {
+      selectNote(notes.value[currentIndex - 1]!.id);
+    } else {
+      selectNote(null);
+    }
+  }
+
   async function deleteNote(id: string): Promise<boolean> {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
@@ -829,6 +851,11 @@ export function useNotes() {
     }
 
     try {
+      const isActive = selectedNoteId.value === id;
+      if (isActive) {
+        selectNextNote();
+      }
+
       const success = await dbDeleteNote(id);
       if (!success) return false;
 
@@ -862,6 +889,37 @@ export function useNotes() {
     } catch (err) {
       console.error(`Failed to delete note ${id}:`, err);
       return false;
+    }
+  }
+
+  async function restoreNote(id: string): Promise<Note | null> {
+    try {
+      const restored = await dbRestoreNote(id);
+      if (!restored) return null;
+
+      const index = notes.value.findIndex((n) => n.id === id);
+      if (index !== -1) {
+        notes.value[index] = restored;
+      } else {
+        notes.value = [restored, ...notes.value];
+      }
+
+      selectedNoteId.value = id;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('markdown-note-active-note-id', id);
+        } catch {}
+      }
+
+      if (restored.folder && !expandedFolders.value.includes(restored.folder)) {
+        expandedFolders.value.push(restored.folder);
+      }
+      await fetchFolders();
+
+      return restored;
+    } catch (err) {
+      console.error(`Failed to restore note ${id}:`, err);
+      return null;
     }
   }
 
@@ -979,11 +1037,13 @@ export function useNotes() {
     deleteFolder,
     moveNoteToFolder,
     selectNote,
+    selectNextNote,
     openNote,
     navigateBackToList,
     createNote,
     updateNote,
     deleteNote,
+    restoreNote,
     queueAutoSave,
     flushAutoSave,
     toggleTagFilter,
