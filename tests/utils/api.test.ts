@@ -80,7 +80,46 @@ describe('API Client Helper (app/utils/api.ts)', () => {
   });
 
   describe('apiFetch functionality', () => {
-    it('performs a successful GET request returning JSON response', async () => {
+    it('unwraps Go backend standard response envelope { statusCode, statusMessage, data }', async () => {
+      const payloadData = { id: 'note-1', title: 'Standard Envelope Note', content: 'Envelope body' };
+      const envelope = {
+        statusCode: 200,
+        statusMessage: 'OK',
+        data: payloadData,
+      };
+
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => envelope,
+      });
+      globalThis.fetch = fetchMock;
+
+      const result = await apiFetch<typeof payloadData>('/api/v1/notes/note-1');
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(payloadData);
+    });
+
+    it('unwraps envelope when data contains array or primitive value', async () => {
+      const listData = [{ id: 'n1' }, { id: 'n2' }];
+      const envelope = {
+        statusCode: 200,
+        statusMessage: 'Success',
+        data: listData,
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => envelope,
+      });
+
+      const result = await apiFetch<typeof listData>('/api/v1/notes');
+      expect(result).toEqual(listData);
+    });
+
+    it('returns direct JSON response when envelope keys are not present', async () => {
       const mockData = { id: 'note-1', title: 'Test Note', content: 'Hello' };
       const fetchMock = vi.fn().mockResolvedValue({
         ok: true,

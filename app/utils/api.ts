@@ -56,12 +56,8 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
   if (!response.ok) {
     let payload: ApiErrorPayload | undefined;
     try {
-      payload = typeof response.json === 'function'
-        ? ((await response.json()) as ApiErrorPayload)
-        : JSON.parse(await response.text());
-    } catch {
-      // Body is non-JSON or unreadable
-    }
+      payload = await response.json();
+    } catch {}
 
     const message =
       payload?.statusMessage ||
@@ -75,5 +71,11 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
     return {} as T;
   }
 
-  return (await response.json()) as T;
+  const result = await response.json();
+  if (result && typeof result === 'object' && 'data' in result && 'statusCode' in result) {
+    return result.data as T;
+  }
+
+  return result as T;
 }
+

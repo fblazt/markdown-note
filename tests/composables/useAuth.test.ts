@@ -56,6 +56,34 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
   });
 
   describe('initAuth', () => {
+    it('successfully restores session when server responds with standard envelope { statusCode, statusMessage, data }', async () => {
+      const authResponse: AuthResponse = {
+        user: mockUser,
+        registrationAllowed: true,
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          statusCode: 200,
+          statusMessage: 'OK',
+          data: authResponse,
+        }),
+      });
+
+      const { user, isAuthenticated, isOfflineAuthed, registrationAllowed, isInitializing, initAuth } = useAuth();
+
+      await initAuth();
+
+      expect(user.value).toEqual(mockUser);
+      expect(isAuthenticated.value).toBe(true);
+      expect(isOfflineAuthed.value).toBe(false);
+      expect(registrationAllowed.value).toBe(true);
+      expect(isInitializing.value).toBe(false);
+      expect(localStorageStore['last_auth_user']).toBe(JSON.stringify(mockUser));
+    });
+
     it('successfully restores session on active 200 OK server response', async () => {
       const authResponse: AuthResponse = {
         user: mockUser,
@@ -169,6 +197,26 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
   });
 
   describe('login', () => {
+    it('authenticates user when response is wrapped in standard Go envelope', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          statusCode: 200,
+          statusMessage: 'OK',
+          data: { user: mockUser },
+        }),
+      });
+
+      const { user, isAuthenticated, login } = useAuth();
+      const result = await login('test@example.com', 'secretPass123');
+
+      expect(result).toEqual(mockUser);
+      expect(user.value).toEqual(mockUser);
+      expect(isAuthenticated.value).toBe(true);
+      expect(localStorageStore['last_auth_user']).toBe(JSON.stringify(mockUser));
+    });
+
     it('authenticates user and caches to localStorage on success', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -212,6 +260,33 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
   });
 
   describe('register', () => {
+    it('registers user when response is wrapped in standard Go envelope', async () => {
+      const newUser: User = {
+        id: 'usr_envelope_1',
+        email: 'env@example.com',
+        name: 'Envelope User',
+        createdAt: '2026-03-01T00:00:00.000Z',
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          statusCode: 201,
+          statusMessage: 'Created',
+          data: { user: newUser },
+        }),
+      });
+
+      const { user, isAuthenticated, register } = useAuth();
+      const result = await register('env@example.com', 'Envelope User', 'pass123456');
+
+      expect(result).toEqual(newUser);
+      expect(user.value).toEqual(newUser);
+      expect(isAuthenticated.value).toBe(true);
+      expect(localStorageStore['last_auth_user']).toBe(JSON.stringify(newUser));
+    });
+
     it('registers user and establishes authenticated session on success', async () => {
       const newUser: User = {
         id: 'usr_new_999',
@@ -363,6 +438,33 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
   });
 
   describe('updateProfile', () => {
+    it('updates user profile data when response is wrapped in standard Go envelope', async () => {
+      const updatedUser: User = {
+        ...mockUser,
+        name: 'Envelope Updated Name',
+        email: 'env_updated@example.com',
+      };
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          statusCode: 200,
+          statusMessage: 'OK',
+          data: { user: updatedUser },
+        }),
+      });
+
+      const { user, updateProfile } = useAuth();
+      user.value = mockUser;
+
+      const result = await updateProfile({ name: 'Envelope Updated Name', email: 'env_updated@example.com' });
+
+      expect(result).toEqual(updatedUser);
+      expect(user.value).toEqual(updatedUser);
+      expect(localStorageStore['last_auth_user']).toBe(JSON.stringify(updatedUser));
+    });
+
     it('updates user profile data and syncs localStorage cache', async () => {
       const updatedUser: User = {
         ...mockUser,

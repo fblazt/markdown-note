@@ -83,6 +83,14 @@
 
       <div class="header-right">
         <ThemeToggle />
+        <button
+          class="btn-icon header-profile-btn"
+          @click="isProfileOpen = true"
+          title="Account Settings"
+          aria-label="Account Settings"
+        >
+          <User :size="16" />
+        </button>
         <button class="btn btn-primary btn-header-new" @click="handleCreateNote" title="New Note (Ctrl+N)">
           <Plus :size="15" />
           <span class="new-note-label">New Note</span>
@@ -166,13 +174,16 @@
     <!-- Global Confirmation Dialog Modal -->
     <ConfirmDialog />
 
+    <!-- User Profile & Account Settings Modal -->
+    <ProfileModal v-if="isProfileOpen" @close="isProfileOpen = false" />
+
     <!-- Global Toast Notifications -->
     <ToastContainer />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import {
   PanelLeft,
   Columns2,
@@ -182,6 +193,7 @@ import {
   ChevronLeft,
   HardDrive,
   Loader2,
+  User,
 } from 'lucide-vue-next';
 import { useAuth } from './composables/useAuth';
 import { useNotes } from './composables/useNotes';
@@ -196,6 +208,9 @@ import ThemeToggle from './components/ThemeToggle.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import StorageAlertBanner from './components/StorageAlertBanner.vue';
+import ProfileModal from './components/ProfileModal.vue';
+
+const isProfileOpen = ref(false);
 
 const {
   isAuthenticated,
