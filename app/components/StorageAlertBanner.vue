@@ -1,51 +1,3 @@
-<template>
-  <transition name="banner-slide">
-    <div
-      v-if="isVisible"
-      class="storage-alert-banner"
-      :class="`banner-${quotaInfo.status}`"
-      role="alert"
-      aria-live="assertive"
-    >
-      <div class="banner-left">
-        <AlertOctagon
-          v-if="quotaInfo.status === 'exceeded' || quotaInfo.status === 'critical'"
-          :size="18"
-          class="banner-icon"
-        />
-        <AlertTriangle v-else :size="18" class="banner-icon" />
-
-        <div class="banner-content">
-          <span class="banner-title">{{ bannerTitle }}</span>
-          <span class="banner-message">{{ bannerMessage }}</span>
-        </div>
-      </div>
-
-      <div class="banner-right">
-        <button
-          type="button"
-          class="btn-banner-action"
-          title="Download JSON backup of all notes"
-          @click="handleExportBackup"
-        >
-          <Download :size="14" />
-          <span>Export Backup</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn-banner-dismiss"
-          title="Dismiss warning for this session"
-          aria-label="Dismiss warning"
-          @click="dismissBanner"
-        >
-          <X :size="16" />
-        </button>
-      </div>
-    </div>
-  </transition>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { AlertTriangle, AlertOctagon, Download, X } from 'lucide-vue-next';
@@ -120,6 +72,54 @@ function handleExportBackup() {
   });
 }
 </script>
+
+<template>
+  <transition name="banner-slide">
+    <div
+      v-if="isVisible"
+      class="storage-alert-banner"
+      :class="`banner-${quotaInfo.status}`"
+      role="alert"
+      aria-live="assertive"
+    >
+      <div class="banner-left">
+        <AlertOctagon
+          v-if="quotaInfo.status === 'exceeded' || quotaInfo.status === 'critical'"
+          :size="18"
+          class="banner-icon"
+        />
+        <AlertTriangle v-else :size="18" class="banner-icon" />
+
+        <div class="banner-content">
+          <span class="banner-title">{{ bannerTitle }}</span>
+          <span class="banner-message">{{ bannerMessage }}</span>
+        </div>
+      </div>
+
+      <div class="banner-right">
+        <button
+          type="button"
+          class="btn-banner-action"
+          title="Download JSON backup of all notes"
+          @click="handleExportBackup"
+        >
+          <Download :size="14" />
+          <span>Export Backup</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-banner-dismiss"
+          title="Dismiss warning for this session"
+          aria-label="Dismiss warning"
+          @click="dismissBanner"
+        >
+          <X :size="16" />
+        </button>
+      </div>
+    </div>
+  </transition>
+</template>
 
 <style scoped>
 .storage-alert-banner {

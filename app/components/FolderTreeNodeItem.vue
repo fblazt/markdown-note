@@ -1,3 +1,190 @@
+<script setup lang="ts">
+import { ref, computed, nextTick, watch } from 'vue';
+import {
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+} from 'lucide-vue-next';
+import type { FolderTreeNode, Note } from '../../shared/types/note';
+import { useNotes } from '../composables/useNotes';
+import NoteCard from './common/NoteCard.vue';
+
+const props = defineProps<{
+  node: FolderTreeNode;
+  renamingFolderPath: string | null;
+  creatingSubfolderParent: string | null;
+  currentDropTarget: string | null;
+  draggedItem: any;
+}>();
+
+const emit = defineEmits<{
+  (e: 'start-create-subfolder', parentPath: string): void;
+  (e: 'submit-create-subfolder', parentPath: string, name: string): void;
+  (e: 'cancel-create-subfolder'): void;
+  (e: 'start-rename-folder', path: string, currentName: string): void;
+  (e: 'submit-rename-folder', oldPath: string, newName: string): void;
+  (e: 'cancel-rename-folder'): void;
+  (e: 'delete-folder', path: string): void;
+  (e: 'create-note', folderPath: string): void;
+  (e: 'open-note', noteId: string): void;
+  (e: 'delete-note', noteId: string, title: string): void;
+  (e: 'drag-start-note', event: DragEvent, note: Note): void;
+  (e: 'drag-start-folder', event: DragEvent, folderPath: string): void;
+  (e: 'drag-end'): void;
+  (e: 'folder-drag-enter', folderPath: string): void;
+  (e: 'folder-drag-leave', folderPath: string): void;
+  (e: 'folder-drop', folderPath: string): void;
+}>();
+
+const {
+  expandedFolders,
+  selectedFolder,
+  selectedNoteId,
+  notesByFolder,
+  toggleFolder,
+} = useNotes();
+
+const renameFolderValue = ref(props.node.name);
+const renameInputRef = ref<HTMLInputElement | null>(null);
+
+const subfolderInputValue = ref('');
+const subfolderInputRef = ref<HTMLInputElement | null>(null);
+
+const isExpanded = computed(() => expandedFolders.value.includes(props.node.path));
+const folderNotes = computed<Note[]>(() => notesByFolder.value[props.node.path] || []);
+const noteCount = computed(() => folderNotes.value.length);
+const isNodeDragging = computed(() => {
+  return props.draggedItem?.type === 'folder' && props.draggedItem?.path === props.node.path;
+});
+
+watch(
+  () => props.renamingFolderPath,
+  (newPath) => {
+    if (newPath === props.node.path) {
+      renameFolderValue.value = props.node.name;
+      nextTick(() => {
+        renameInputRef.value?.focus();
+        renameInputRef.value?.select();
+      });
+    }
+  }
+);
+
+watch(
+  () => props.creatingSubfolderParent,
+  (parent) => {
+    if (parent === props.node.path) {
+      subfolderInputValue.value = '';
+      nextTick(() => {
+        subfolderInputRef.value?.focus();
+      });
+    }
+  }
+);
+
+function handleFolderClick() {
+  toggleFolder(props.node.path);
+}
+
+function startCreateSubfolder() {
+  if (!isExpanded.value) {
+    toggleFolder(props.node.path);
+  }
+  emit('start-create-subfolder', props.node.path);
+}
+
+function submitSubfolder() {
+  const trimmed = subfolderInputValue.value.trim();
+  if (trimmed) {
+    emit('submit-create-subfolder', props.node.path, trimmed);
+  }
+  subfolderInputValue.value = '';
+}
+
+function cancelSubfolder() {
+  subfolderInputValue.value = '';
+  emit('cancel-create-subfolder');
+}
+
+function startRename() {
+  emit('start-rename-folder', props.node.path, props.node.name);
+}
+
+function submitRename() {
+  const trimmed = renameFolderValue.value.trim();
+  if (trimmed && trimmed !== props.node.name) {
+    emit('submit-rename-folder', props.node.path, trimmed);
+  } else {
+    emit('cancel-rename-folder');
+  }
+}
+
+function cancelRename() {
+  emit('cancel-rename-folder');
+}
+
+function emitCreateNote(path: string) {
+  emit('create-note', path);
+}
+
+function emitDeleteFolder(path: string) {
+  emit('delete-folder', path);
+}
+
+function emitOpenNote(id: string) {
+  emit('open-note', id);
+}
+
+function emitDeleteNote(id: string, title: string) {
+  emit('delete-note', id, title);
+}
+
+function onFolderDragStart(e: DragEvent) {
+  emit('drag-start-folder', e, props.node.path);
+}
+
+function onNoteDragStart(e: DragEvent, note: Note) {
+  emit('drag-start-note', e, note);
+}
+
+function onDragEnd() {
+  emit('drag-end');
+}
+
+function onFolderDragOver(e: DragEvent) {
+  if (props.draggedItem?.type === 'folder') {
+    if (props.node.path === props.draggedItem.path || props.node.path.startsWith(props.draggedItem.path + '/')) {
+      return;
+    }
+  }
+  emit('folder-drag-enter', props.node.path);
+}
+
+function onFolderDragEnter(e: DragEvent) {
+  if (props.draggedItem?.type === 'folder') {
+    if (props.node.path === props.draggedItem.path || props.node.path.startsWith(props.draggedItem.path + '/')) {
+      return;
+    }
+  }
+  emit('folder-drag-enter', props.node.path);
+}
+
+function onFolderDragLeave(e: DragEvent) {
+  emit('folder-drag-leave', props.node.path);
+}
+
+function onFolderDrop(e: DragEvent) {
+  emit('folder-drop', props.node.path);
+}
+</script>
+
 <template>
   <div class="folder-tree-node" :class="{ 'has-children': node.children && node.children.length > 0 }">
     <!-- Inline Rename Form for this folder -->
@@ -204,57 +391,17 @@
         class="folder-notes-container"
         :style="{ paddingLeft: `calc(0.45rem + ${(node.depth + 1) * 14}px)` }"
       >
-        <div
+        <NoteCard
           v-for="note in folderNotes"
           :key="note.id"
-          class="note-list-item folder-note-item"
-          :class="{
-            active: selectedNoteId === note.id,
-            'is-dragging': draggedItem?.type === 'note' && draggedItem?.noteId === note.id,
-          }"
-          draggable="true"
-          @dragstart="onNoteDragStart($event, note)"
+          :note="note"
+          :is-selected="selectedNoteId === note.id"
+          :is-dragging="draggedItem?.type === 'note' && draggedItem?.noteId === note.id"
+          @open="emitOpenNote"
+          @delete="emitDeleteNote"
+          @dragstart="onNoteDragStart"
           @dragend="onDragEnd"
-          @click="emitOpenNote(note.id)"
-        >
-          <div class="note-item-main">
-            <div class="note-item-header">
-              <h3 class="note-item-title">{{ note.title || 'Untitled Note' }}</h3>
-              <button
-                class="btn-icon btn-icon-danger btn-delete-note"
-                title="Delete Note"
-                aria-label="Delete Note"
-                @click.stop="emitDeleteNote(note.id, note.title)"
-              >
-                <Trash2 :size="14" />
-              </button>
-            </div>
-
-            <p class="note-item-preview">
-              {{ getPreviewSnippet(note.content) }}
-            </p>
-
-            <div class="note-item-meta">
-              <span class="note-date">
-                <Calendar :size="11" />
-                {{ formatDate(note.updatedAt) }}
-              </span>
-
-              <div v-if="note.tags && note.tags.length > 0" class="note-tags-list">
-                <span
-                  v-for="t in note.tags.slice(0, 2)"
-                  :key="t"
-                  class="tag-chip"
-                >
-                  #{{ t }}
-                </span>
-                <span v-if="note.tags.length > 2" class="tag-chip-more">
-                  +{{ note.tags.length - 2 }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        />
       </div>
 
       <!-- Empty Notice if no subfolders and no direct notes -->
@@ -276,264 +423,42 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue';
-import {
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Pencil,
-  Trash2,
-  Check,
-  X,
-  Calendar,
-} from 'lucide-vue-next';
-import type { FolderTreeNode, Note } from '../../shared/types/note';
-import { useNotes } from '../composables/useNotes';
-
-const props = defineProps<{
-  node: FolderTreeNode;
-  renamingFolderPath: string | null;
-  creatingSubfolderParent: string | null;
-  currentDropTarget: string | null;
-  draggedItem: any;
-}>();
-
-const emit = defineEmits<{
-  (e: 'start-create-subfolder', parentPath: string): void;
-  (e: 'submit-create-subfolder', parentPath: string, name: string): void;
-  (e: 'cancel-create-subfolder'): void;
-  (e: 'start-rename-folder', path: string, currentName: string): void;
-  (e: 'submit-rename-folder', oldPath: string, newName: string): void;
-  (e: 'cancel-rename-folder'): void;
-  (e: 'delete-folder', path: string): void;
-  (e: 'create-note', folderPath: string): void;
-  (e: 'open-note', noteId: string): void;
-  (e: 'delete-note', noteId: string, title: string): void;
-  (e: 'drag-start-note', event: DragEvent, note: Note): void;
-  (e: 'drag-start-folder', event: DragEvent, folderPath: string): void;
-  (e: 'drag-end'): void;
-  (e: 'folder-drag-enter', folderPath: string): void;
-  (e: 'folder-drag-leave', folderPath: string): void;
-  (e: 'folder-drop', folderPath: string): void;
-}>();
-
-const {
-  expandedFolders,
-  selectedFolder,
-  selectedNoteId,
-  notesByFolder,
-  toggleFolder,
-} = useNotes();
-
-const renameFolderValue = ref(props.node.name);
-const renameInputRef = ref<HTMLInputElement | null>(null);
-
-const subfolderInputValue = ref('');
-const subfolderInputRef = ref<HTMLInputElement | null>(null);
-
-const isExpanded = computed(() => expandedFolders.value.includes(props.node.path));
-const folderNotes = computed<Note[]>(() => notesByFolder.value[props.node.path] || []);
-const noteCount = computed(() => folderNotes.value.length);
-const isNodeDragging = computed(() => {
-  return props.draggedItem?.type === 'folder' && props.draggedItem?.path === props.node.path;
-});
-
-watch(
-  () => props.renamingFolderPath,
-  (newPath) => {
-    if (newPath === props.node.path) {
-      renameFolderValue.value = props.node.name;
-      nextTick(() => {
-        renameInputRef.value?.focus();
-        renameInputRef.value?.select();
-      });
-    }
-  }
-);
-
-watch(
-  () => props.creatingSubfolderParent,
-  (parent) => {
-    if (parent === props.node.path) {
-      subfolderInputValue.value = '';
-      nextTick(() => {
-        subfolderInputRef.value?.focus();
-      });
-    }
-  }
-);
-
-function handleFolderClick() {
-  toggleFolder(props.node.path);
-}
-
-function startCreateSubfolder() {
-  if (!isExpanded.value) {
-    toggleFolder(props.node.path);
-  }
-  emit('start-create-subfolder', props.node.path);
-}
-
-function submitSubfolder() {
-  const trimmed = subfolderInputValue.value.trim();
-  if (trimmed) {
-    emit('submit-create-subfolder', props.node.path, trimmed);
-  }
-  subfolderInputValue.value = '';
-}
-
-function cancelSubfolder() {
-  subfolderInputValue.value = '';
-  emit('cancel-create-subfolder');
-}
-
-function startRename() {
-  emit('start-rename-folder', props.node.path, props.node.name);
-}
-
-function submitRename() {
-  const trimmed = renameFolderValue.value.trim();
-  if (trimmed && trimmed !== props.node.name) {
-    emit('submit-rename-folder', props.node.path, trimmed);
-  } else {
-    emit('cancel-rename-folder');
-  }
-}
-
-function cancelRename() {
-  emit('cancel-rename-folder');
-}
-
-function emitCreateNote(path: string) {
-  emit('create-note', path);
-}
-
-function emitDeleteFolder(path: string) {
-  emit('delete-folder', path);
-}
-
-function emitOpenNote(id: string) {
-  emit('open-note', id);
-}
-
-function emitDeleteNote(id: string, title: string) {
-  emit('delete-note', id, title);
-}
-
-function onFolderDragStart(e: DragEvent) {
-  emit('drag-start-folder', e, props.node.path);
-}
-
-function onNoteDragStart(e: DragEvent, note: Note) {
-  emit('drag-start-note', e, note);
-}
-
-function onDragEnd() {
-  emit('drag-end');
-}
-
-function onFolderDragOver(e: DragEvent) {
-  if (props.draggedItem?.type === 'folder') {
-    if (props.node.path === props.draggedItem.path || props.node.path.startsWith(props.draggedItem.path + '/')) {
-      return;
-    }
-  }
-  emit('folder-drag-enter', props.node.path);
-}
-
-function onFolderDragEnter(e: DragEvent) {
-  if (props.draggedItem?.type === 'folder') {
-    if (props.node.path === props.draggedItem.path || props.node.path.startsWith(props.draggedItem.path + '/')) {
-      return;
-    }
-  }
-  emit('folder-drag-enter', props.node.path);
-}
-
-function onFolderDragLeave(e: DragEvent) {
-  emit('folder-drag-leave', props.node.path);
-}
-
-function onFolderDrop(e: DragEvent) {
-  emit('folder-drop', props.node.path);
-}
-
-function getPreviewSnippet(content: string): string {
-  if (!content) return 'No additional text';
-  const clean = content
-    .replace(/^#+\s+/gm, '')
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)(.*?)\1/g, '$2')
-    .replace(/`{1,3}.*?`{1,3}/g, '')
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-    .trim();
-
-  const firstLine = clean.split('\n').filter((l) => l.trim().length > 0)[0] || '';
-  return firstLine.slice(0, 80) + (firstLine.length > 80 ? '...' : '') || 'Empty note';
-}
-
-function formatDate(isoString: string): string {
-  if (!isoString) return '';
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-</script>
-
 <style scoped>
-/* Drag and Drop Visual Feedback */
-.is-dragging {
-  opacity: 0.4 !important;
-  cursor: grabbing !important;
-}
-
-.is-drop-target {
-  outline: 2px dashed var(--accent-primary) !important;
-  outline-offset: -2px;
-  background-color: var(--bg-surface-active) !important;
-  box-shadow: 0 0 8px rgba(122, 168, 159, 0.3) !important;
-}
-
 .folder-tree-node {
   display: flex;
   flex-direction: column;
+  user-select: none;
 }
 
 .folder-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.45rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
-  user-select: none;
-  min-height: 32px;
+  min-height: 28px;
 }
 
 .folder-header:hover {
-  background-color: var(--bg-surface);
+  background-color: var(--bg-surface-hover);
 }
 
 .folder-header.active {
   background-color: var(--bg-surface-active);
+}
+
+.folder-header.is-dragging {
+  opacity: 0.4 !important;
+  cursor: grabbing !important;
+}
+
+.folder-header.is-drop-target {
+  outline: 2px dashed var(--accent-primary) !important;
+  outline-offset: -2px;
+  background-color: var(--bg-surface-active) !important;
+  box-shadow: 0 0 8px rgba(122, 168, 159, 0.3) !important;
 }
 
 .folder-header-left {
@@ -583,7 +508,6 @@ function formatDate(isoString: string): string {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  flex-shrink: 0;
 }
 
 .folder-count-badge {
@@ -636,21 +560,65 @@ function formatDate(isoString: string): string {
   color: var(--accent-danger);
 }
 
-/* Inline Folder and Subfolder Forms */
-.inline-folder-form {
+.folder-children-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.folder-notes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.35rem;
+}
+
+.folder-empty-notice {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0.35rem 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.35rem 0.5rem;
-  background-color: var(--bg-surface);
-  border-radius: var(--radius-sm);
-  margin: 0.15rem 0.35rem;
 }
 
-.folder-rename-form,
+.btn-empty-add {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  color: var(--accent-primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.btn-empty-add:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent-primary);
+}
+
+.inline-folder-form {
+  padding: 0.5rem 0.85rem;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.folder-rename-form {
+  border-radius: var(--radius-sm);
+  margin: 0.15rem 0.35rem;
+  padding: 0.35rem 0.5rem;
+}
+
 .subfolder-inline-form {
   border-radius: var(--radius-sm);
   margin: 0.15rem 0.35rem;
+  padding: 0.35rem 0.5rem;
 }
 
 .folder-input-wrapper {
@@ -712,206 +680,5 @@ function formatDate(isoString: string): string {
 .btn-folder-cancel:hover {
   background-color: var(--accent-danger);
   color: var(--text-inverse);
-}
-
-/* Children & Notes Containers */
-.folder-children-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.folder-notes-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.2rem;
-  margin-bottom: 0.35rem;
-}
-
-.folder-empty-notice {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  padding: 0.35rem 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.btn-empty-add {
-  background: transparent;
-  border: 1px dashed var(--border-subtle);
-  color: var(--accent-primary);
-  font-size: 0.7rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.btn-empty-add:hover {
-  background: var(--bg-surface);
-  border-color: var(--accent-primary);
-}
-
-/* Folder Note Item */
-.note-list-item,
-.folder-note-item {
-  padding: 0.55rem 0.65rem;
-  border-radius: var(--radius-md);
-  background-color: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-
-.folder-note-item:hover,
-.note-list-item:hover {
-  background-color: var(--bg-surface);
-}
-
-.folder-note-item.active,
-.note-list-item.active {
-  background-color: var(--bg-surface-active);
-  border-color: var(--border-focus);
-}
-
-.note-item-main {
-  display: flex;
-  flex-direction: column;
-}
-
-.note-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  margin-bottom: 0.2rem;
-}
-
-.note-item-title {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.btn-icon {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-icon-danger {
-  color: var(--text-secondary);
-}
-
-.btn-delete-note {
-  opacity: 0;
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
-}
-
-.btn-delete-note:hover {
-  background-color: rgba(196, 116, 110, 0.2);
-  color: var(--accent-danger);
-}
-
-.folder-note-item:hover .btn-delete-note,
-.note-list-item:hover .btn-delete-note {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .btn-delete-note {
-    opacity: 0.85;
-  }
-}
-
-.note-item-preview {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-bottom: 0.35rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.note-item-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  font-size: 0.68rem;
-  color: var(--text-muted);
-}
-
-.note-date {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  white-space: nowrap;
-}
-
-.note-tags-list {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  overflow: hidden;
-}
-
-.tag-chip {
-  background: var(--bg-surface);
-  color: var(--accent-primary);
-  border: 1px solid var(--border-subtle);
-  font-size: 0.62rem;
-  padding: 0.04rem 0.3rem;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-
-.tag-chip-more {
-  font-size: 0.62rem;
-  color: var(--text-muted);
-}
-
-/* Mobile Responsive */
-@media (max-width: 767px) {
-  .folder-header {
-    min-height: 44px;
-    padding: 0.6rem 0.75rem;
-  }
-
-  .folder-hover-actions {
-    display: flex;
-    opacity: 0.9;
-  }
-
-  .btn-icon-folder {
-    min-width: 36px;
-    min-height: 36px;
-  }
-
-  .btn-delete-note {
-    opacity: 0.85;
-    padding: 0.4rem;
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .folder-note-item,
-  .note-list-item {
-    padding: 0.75rem 0.85rem;
-  }
 }
 </style>

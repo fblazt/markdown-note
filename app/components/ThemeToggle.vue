@@ -1,3 +1,59 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { Monitor, Sun, Moon, Check } from 'lucide-vue-next';
+import { useTheme, type ThemeSetting } from '../composables/useTheme';
+
+const { themeSetting, setTheme } = useTheme();
+const isOpen = ref(false);
+const toggleRef = ref<HTMLElement | null>(null);
+
+const currentLabel = computed(() => {
+  if (themeSetting.value === 'system') return 'System (Auto)';
+  if (themeSetting.value === 'light') return 'Lotus Light';
+  return 'Dragon Dark';
+});
+
+function toggleDropdown(e: MouseEvent) {
+  e.stopPropagation();
+  isOpen.value = !isOpen.value;
+}
+
+function closeDropdown() {
+  isOpen.value = false;
+}
+
+function selectTheme(setting: ThemeSetting) {
+  setTheme(setting);
+  closeDropdown();
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (toggleRef.value && !toggleRef.value.contains(event.target as Node)) {
+    closeDropdown();
+  }
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isOpen.value) {
+    closeDropdown();
+  }
+}
+
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('keydown', handleKeydown);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('click', handleClickOutside);
+    document.removeEventListener('keydown', handleKeydown);
+  }
+});
+</script>
+
 <template>
   <div ref="toggleRef" class="theme-toggle-wrapper">
     <!-- Trigger Button -->
@@ -78,62 +134,6 @@
     </transition>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { Monitor, Sun, Moon, Check } from 'lucide-vue-next';
-import { useTheme, type ThemeSetting } from '../composables/useTheme';
-
-const { themeSetting, setTheme } = useTheme();
-const isOpen = ref(false);
-const toggleRef = ref<HTMLElement | null>(null);
-
-const currentLabel = computed(() => {
-  if (themeSetting.value === 'system') return 'System (Auto)';
-  if (themeSetting.value === 'light') return 'Lotus Light';
-  return 'Dragon Dark';
-});
-
-function toggleDropdown(e: MouseEvent) {
-  e.stopPropagation();
-  isOpen.value = !isOpen.value;
-}
-
-function closeDropdown() {
-  isOpen.value = false;
-}
-
-function selectTheme(setting: ThemeSetting) {
-  setTheme(setting);
-  closeDropdown();
-}
-
-function handleClickOutside(event: MouseEvent) {
-  if (toggleRef.value && !toggleRef.value.contains(event.target as Node)) {
-    closeDropdown();
-  }
-}
-
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isOpen.value) {
-    closeDropdown();
-  }
-}
-
-onMounted(() => {
-  if (typeof document !== 'undefined') {
-    document.addEventListener('click', handleClickOutside);
-    document.addEventListener('keydown', handleKeydown);
-  }
-});
-
-onUnmounted(() => {
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('click', handleClickOutside);
-    document.removeEventListener('keydown', handleKeydown);
-  }
-});
-</script>
 
 <style scoped>
 .theme-toggle-wrapper {

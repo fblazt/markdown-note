@@ -1,38 +1,3 @@
-<template>
-  <button
-    type="button"
-    class="sync-status-badge"
-    :class="[
-      `sync-state-${syncState}`,
-      { 'has-pending': pendingCount > 0 },
-    ]"
-    :aria-label="accessibleLabel"
-    :title="tooltipText"
-    @click="handleSync"
-  >
-    <!-- Status Dot Indicator -->
-    <span
-      class="status-dot"
-      :class="`dot-${syncState}`"
-      aria-hidden="true"
-    />
-
-    <!-- Sync State Text Label -->
-    <span class="sync-state-label">
-      {{ stateLabel }}
-    </span>
-
-    <!-- Pending Count Indicator -->
-    <span
-      v-if="pendingCount > 0"
-      class="sync-pending-badge"
-      aria-hidden="true"
-    >
-      ({{ pendingCount }} pending)
-    </span>
-  </button>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useSync } from '../composables/useSync';
@@ -100,6 +65,41 @@ function handleSync(): Promise<void> | void {
   return sync();
 }
 </script>
+
+<template>
+  <button
+    type="button"
+    class="sync-status-badge"
+    :class="[
+      `sync-state-${syncState}`,
+      { 'has-pending': pendingCount > 0 },
+    ]"
+    :aria-label="accessibleLabel"
+    :title="tooltipText"
+    @click="handleSync"
+  >
+    <!-- Status Dot Indicator -->
+    <span
+      class="status-dot"
+      :class="`dot-${syncState}`"
+      aria-hidden="true"
+    />
+
+    <!-- Sync State Text Label -->
+    <span class="sync-state-label">
+      {{ stateLabel }}
+    </span>
+
+    <!-- Pending Count Indicator -->
+    <span
+      v-if="pendingCount > 0"
+      class="sync-pending-badge"
+      aria-hidden="true"
+    >
+      ({{ pendingCount }} pending)
+    </span>
+  </button>
+</template>
 
 <style scoped>
 .sync-status-badge {

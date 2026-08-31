@@ -1,84 +1,3 @@
-<template>
-  <Teleport to="body">
-    <transition name="dialog-fade">
-      <div
-        v-if="isOpen"
-        class="dialog-overlay modal-backdrop"
-        role="presentation"
-        @click.self="handleBackdropClick"
-      >
-        <div
-          ref="dialogRef"
-          class="dialog-modal modal-card"
-          :class="`dialog-variant-${options.variant || 'danger'}`"
-          :role="options.variant === 'danger' ? 'alertdialog' : 'dialog'"
-          aria-modal="true"
-          aria-labelledby="dialog-title"
-          aria-describedby="dialog-description"
-          tabindex="-1"
-          @keydown="handleKeydown"
-        >
-          <!-- Header -->
-          <div class="dialog-header">
-            <div class="dialog-header-left">
-              <div class="dialog-icon-badge" :class="`badge-${options.variant || 'danger'}`">
-                <Trash2 v-if="options.icon === 'trash'" :size="18" />
-                <AlertTriangle v-else-if="options.icon === 'alert'" :size="18" />
-                <Info v-else :size="18" />
-              </div>
-              <h3 id="dialog-title" class="dialog-title">
-                {{ options.title }}
-              </h3>
-            </div>
-            <button
-              type="button"
-              class="btn-icon dialog-btn-close"
-              aria-label="Close dialog"
-              @click="handleCancel"
-            >
-              <X :size="16" />
-            </button>
-          </div>
-
-          <!-- Body -->
-          <div class="dialog-body">
-            <p id="dialog-description" class="dialog-message">
-              {{ options.message }}
-            </p>
-
-            <div v-if="options.itemTitle" class="dialog-item-chip dialog-item-title">
-              <FileText :size="14" class="item-chip-icon" />
-              <span class="item-chip-text">{{ options.itemTitle }}</span>
-            </div>
-          </div>
-
-          <!-- Footer Actions -->
-          <div class="dialog-footer">
-            <button
-              ref="cancelBtnRef"
-              type="button"
-              class="btn btn-secondary dialog-btn-cancel"
-              @click="handleCancel"
-            >
-              {{ options.cancelText || 'Cancel' }}
-            </button>
-            <button
-              ref="confirmBtnRef"
-              type="button"
-              class="btn dialog-btn-confirm"
-              :class="options.variant === 'danger' ? 'btn-danger' : 'btn-primary'"
-              @click="handleConfirm"
-            >
-              <Trash2 v-if="options.variant === 'danger' && options.icon === 'trash'" :size="14" />
-              <span>{{ options.confirmText || 'Confirm' }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
-  </Teleport>
-</template>
-
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { Trash2, AlertTriangle, Info, X, FileText } from 'lucide-vue-next';
@@ -171,6 +90,87 @@ onUnmounted(() => {
   }
 });
 </script>
+
+<template>
+  <Teleport to="body">
+    <transition name="dialog-fade">
+      <div
+        v-if="isOpen"
+        class="dialog-overlay modal-backdrop"
+        role="presentation"
+        @click.self="handleBackdropClick"
+      >
+        <div
+          ref="dialogRef"
+          class="dialog-modal modal-card"
+          :class="`dialog-variant-${options.variant || 'danger'}`"
+          :role="options.variant === 'danger' ? 'alertdialog' : 'dialog'"
+          aria-modal="true"
+          aria-labelledby="dialog-title"
+          aria-describedby="dialog-description"
+          tabindex="-1"
+          @keydown="handleKeydown"
+        >
+          <!-- Header -->
+          <div class="dialog-header">
+            <div class="dialog-header-left">
+              <div class="dialog-icon-badge" :class="`badge-${options.variant || 'danger'}`">
+                <Trash2 v-if="options.icon === 'trash'" :size="18" />
+                <AlertTriangle v-else-if="options.icon === 'alert'" :size="18" />
+                <Info v-else :size="18" />
+              </div>
+              <h3 id="dialog-title" class="dialog-title">
+                {{ options.title }}
+              </h3>
+            </div>
+            <button
+              type="button"
+              class="btn-icon dialog-btn-close"
+              aria-label="Close dialog"
+              @click="handleCancel"
+            >
+              <X :size="16" />
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="dialog-body">
+            <p id="dialog-description" class="dialog-message">
+              {{ options.message }}
+            </p>
+
+            <div v-if="options.itemTitle" class="dialog-item-chip dialog-item-title">
+              <FileText :size="14" class="item-chip-icon" />
+              <span class="item-chip-text">{{ options.itemTitle }}</span>
+            </div>
+          </div>
+
+          <!-- Footer Actions -->
+          <div class="dialog-footer">
+            <button
+              ref="cancelBtnRef"
+              type="button"
+              class="btn btn-secondary dialog-btn-cancel"
+              @click="handleCancel"
+            >
+              {{ options.cancelText || 'Cancel' }}
+            </button>
+            <button
+              ref="confirmBtnRef"
+              type="button"
+              class="btn dialog-btn-confirm"
+              :class="options.variant === 'danger' ? 'btn-danger' : 'btn-primary'"
+              @click="handleConfirm"
+            >
+              <Trash2 v-if="options.variant === 'danger' && options.icon === 'trash'" :size="14" />
+              <span>{{ options.confirmText || 'Confirm' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+  </Teleport>
+</template>
 
 <style scoped>
 .dialog-overlay {

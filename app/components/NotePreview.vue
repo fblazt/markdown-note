@@ -1,53 +1,3 @@
-<template>
-  <div v-if="activeNote" class="note-preview">
-    <!-- Preview Header & Actions -->
-    <div class="preview-header">
-      <div class="preview-title">
-        <Eye :size="15" class="preview-icon" />
-        <span>Preview</span>
-      </div>
-
-      <div class="preview-actions">
-        <button
-          class="btn-action"
-          @click="copyMarkdown"
-          :title="copiedMd ? 'Copied Markdown!' : 'Copy raw Markdown'"
-          aria-label="Copy raw Markdown"
-        >
-          <Check v-if="copiedMd" :size="14" class="text-success" />
-          <Copy v-else :size="14" />
-          <span>{{ copiedMd ? 'Copied MD' : 'Copy MD' }}</span>
-        </button>
-
-        <button
-          class="btn-action"
-          @click="copyHtml"
-          :title="copiedHtml ? 'Copied HTML!' : 'Copy sanitized HTML'"
-          aria-label="Copy sanitized HTML"
-        >
-          <Check v-if="copiedHtml" :size="14" class="text-success" />
-          <Code v-else :size="14" />
-          <span>{{ copiedHtml ? 'Copied HTML' : 'Copy HTML' }}</span>
-        </button>
-
-        <ExportDropdown :note="activeNote" />
-      </div>
-    </div>
-
-    <!-- Rendered Markdown Body -->
-    <div class="preview-scroll-container">
-      <div v-if="activeNote.content" class="markdown-body" v-html="renderedHtml"></div>
-      <div v-else class="preview-empty">
-        <p>No content to preview</p>
-      </div>
-    </div>
-  </div>
-
-  <div v-else class="preview-empty-state">
-    <p>Select a note to preview</p>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Eye, Copy, Check, Code } from 'lucide-vue-next';
@@ -140,6 +90,56 @@ async function copyHtml() {
   }
 }
 </script>
+
+<template>
+  <div v-if="activeNote" class="note-preview">
+    <!-- Preview Header & Actions -->
+    <div class="preview-header">
+      <div class="preview-title">
+        <Eye :size="15" class="preview-icon" />
+        <span>Preview</span>
+      </div>
+
+      <div class="preview-actions">
+        <button
+          class="btn-action"
+          @click="copyMarkdown"
+          :title="copiedMd ? 'Copied Markdown!' : 'Copy raw Markdown'"
+          aria-label="Copy raw Markdown"
+        >
+          <Check v-if="copiedMd" :size="14" class="text-success" />
+          <Copy v-else :size="14" />
+          <span>{{ copiedMd ? 'Copied MD' : 'Copy MD' }}</span>
+        </button>
+
+        <button
+          class="btn-action"
+          @click="copyHtml"
+          :title="copiedHtml ? 'Copied HTML!' : 'Copy sanitized HTML'"
+          aria-label="Copy sanitized HTML"
+        >
+          <Check v-if="copiedHtml" :size="14" class="text-success" />
+          <Code v-else :size="14" />
+          <span>{{ copiedHtml ? 'Copied HTML' : 'Copy HTML' }}</span>
+        </button>
+
+        <ExportDropdown :note="activeNote" />
+      </div>
+    </div>
+
+    <!-- Rendered Markdown Body -->
+    <div class="preview-scroll-container">
+      <div v-if="activeNote.content" class="markdown-body" v-html="renderedHtml"></div>
+      <div v-else class="preview-empty">
+        <p>No content to preview</p>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="preview-empty-state">
+    <p>Select a note to preview</p>
+  </div>
+</template>
 
 <style scoped>
 .note-preview {

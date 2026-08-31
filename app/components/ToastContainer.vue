@@ -1,3 +1,24 @@
+<script setup lang="ts">
+import {
+  Info,
+  CheckCircle2,
+  AlertTriangle,
+  AlertOctagon,
+  X,
+} from 'lucide-vue-next';
+import { useToast } from '../composables/useToast';
+import type { Toast } from '../../shared/types/storage';
+
+const { toasts, removeToast } = useToast();
+
+function handleActionClick(toast: Toast) {
+  if (toast.action) {
+    toast.action.onClick();
+    removeToast(toast.id);
+  }
+}
+</script>
+
 <template>
   <div
     class="toast-container"
@@ -61,27 +82,6 @@
     </transition-group>
   </div>
 </template>
-
-<script setup lang="ts">
-import {
-  Info,
-  CheckCircle2,
-  AlertTriangle,
-  AlertOctagon,
-  X,
-} from 'lucide-vue-next';
-import { useToast } from '../composables/useToast';
-import type { Toast } from '../../shared/types/storage';
-
-const { toasts, removeToast } = useToast();
-
-function handleActionClick(toast: Toast) {
-  if (toast.action) {
-    toast.action.onClick();
-    removeToast(toast.id);
-  }
-}
-</script>
 
 <style scoped>
 .toast-container {

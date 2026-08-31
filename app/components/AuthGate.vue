@@ -1,3 +1,93 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import {
+  BookOpen,
+  LogIn,
+  UserPlus,
+  Mail,
+  Lock,
+  User as UserIcon,
+  AlertCircle,
+  Loader2,
+} from 'lucide-vue-next';
+import { useAuth } from '../composables/useAuth';
+import ThemeToggle from './ThemeToggle.vue';
+
+const emit = defineEmits<{
+  (e: 'authenticated'): void;
+}>();
+
+const { login, register, registrationAllowed } = useAuth();
+
+const mode = ref<'login' | 'register'>('login');
+const name = ref('');
+const email = ref('');
+const password = ref('');
+const isSubmitting = ref(false);
+const errorMessage = ref('');
+
+// Auto fallback to login if registration is disabled
+watch(
+  registrationAllowed,
+  (allowed) => {
+    if (!allowed && mode.value === 'register') {
+      mode.value = 'login';
+    }
+  },
+  { immediate: true }
+);
+
+function switchMode(newMode: 'login' | 'register') {
+  if (isSubmitting.value) return;
+  mode.value = newMode;
+  errorMessage.value = '';
+}
+
+async function handleSubmit() {
+  if (isSubmitting.value) return;
+  errorMessage.value = '';
+
+  const cleanEmail = email.value.trim();
+  const cleanPassword = password.value;
+  const cleanName = name.value.trim();
+
+  if (!cleanEmail) {
+    errorMessage.value = 'Please enter your email address.';
+    return;
+  }
+  if (!cleanPassword) {
+    errorMessage.value = 'Please enter your password.';
+    return;
+  }
+  if (mode.value === 'register') {
+    if (!cleanName) {
+      errorMessage.value = 'Please enter your name.';
+      return;
+    }
+    if (cleanPassword.length < 8) {
+      errorMessage.value = 'Password must be at least 8 characters long.';
+      return;
+    }
+  }
+
+  isSubmitting.value = true;
+
+  try {
+    if (mode.value === 'login') {
+      await login(cleanEmail, cleanPassword);
+    } else {
+      await register(cleanEmail, cleanName, cleanPassword);
+    }
+    emit('authenticated');
+  } catch (err: any) {
+    errorMessage.value =
+      err?.message || err?.statusMessage || 'Authentication failed. Please check your credentials and try again.';
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+</script>
+
 <template>
   <div class="auth-gate-wrapper">
     <div class="auth-gate-header-bar">
@@ -130,96 +220,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, watch } from 'vue';
-import {
-  BookOpen,
-  LogIn,
-  UserPlus,
-  Mail,
-  Lock,
-  User as UserIcon,
-  AlertCircle,
-  Loader2,
-} from 'lucide-vue-next';
-import { useAuth } from '../composables/useAuth';
-import ThemeToggle from './ThemeToggle.vue';
-
-const emit = defineEmits<{
-  (e: 'authenticated'): void;
-}>();
-
-const { login, register, registrationAllowed } = useAuth();
-
-const mode = ref<'login' | 'register'>('login');
-const name = ref('');
-const email = ref('');
-const password = ref('');
-const isSubmitting = ref(false);
-const errorMessage = ref('');
-
-// Auto fallback to login if registration is disabled
-watch(
-  registrationAllowed,
-  (allowed) => {
-    if (!allowed && mode.value === 'register') {
-      mode.value = 'login';
-    }
-  },
-  { immediate: true }
-);
-
-function switchMode(newMode: 'login' | 'register') {
-  if (isSubmitting.value) return;
-  mode.value = newMode;
-  errorMessage.value = '';
-}
-
-async function handleSubmit() {
-  if (isSubmitting.value) return;
-  errorMessage.value = '';
-
-  const cleanEmail = email.value.trim();
-  const cleanPassword = password.value;
-  const cleanName = name.value.trim();
-
-  if (!cleanEmail) {
-    errorMessage.value = 'Please enter your email address.';
-    return;
-  }
-  if (!cleanPassword) {
-    errorMessage.value = 'Please enter your password.';
-    return;
-  }
-  if (mode.value === 'register') {
-    if (!cleanName) {
-      errorMessage.value = 'Please enter your name.';
-      return;
-    }
-    if (cleanPassword.length < 8) {
-      errorMessage.value = 'Password must be at least 8 characters long.';
-      return;
-    }
-  }
-
-  isSubmitting.value = true;
-
-  try {
-    if (mode.value === 'login') {
-      await login(cleanEmail, cleanPassword);
-    } else {
-      await register(cleanEmail, cleanName, cleanPassword);
-    }
-    emit('authenticated');
-  } catch (err: any) {
-    errorMessage.value =
-      err?.message || err?.statusMessage || 'Authentication failed. Please check your credentials and try again.';
-  } finally {
-    isSubmitting.value = false;
-  }
-}
-</script>
 
 <style scoped>
 .auth-gate-wrapper {

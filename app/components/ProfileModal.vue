@@ -1,3 +1,234 @@
+<script setup lang="ts">
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import {
+  User,
+  Mail,
+  KeyRound,
+  LogOut,
+  X,
+  Calendar,
+  Check,
+  AlertCircle,
+  Loader2,
+} from 'lucide-vue-next';
+import { useAuth } from '../composables/useAuth';
+
+const emit = defineEmits<{
+  (e: 'close'): void;
+}>();
+
+const { user, updateProfile, changePassword, logout } = useAuth();
+
+const modalRef = ref<HTMLElement | null>(null);
+const headerCloseBtnRef = ref<HTMLButtonElement | null>(null);
+let previousActiveElement: HTMLElement | null = null;
+
+const activeTab = ref<'profile' | 'security'>('profile');
+
+// Profile form state
+const nameInput = ref(user.value?.name || '');
+const emailInput = ref(user.value?.email || '');
+const isUpdatingProfile = ref(false);
+const profileSuccess = ref('');
+const profileError = ref('');
+
+// Password form state
+const currentPassword = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+const isChangingPassword = ref(false);
+const passwordSuccess = ref('');
+const passwordError = ref('');
+
+// Logout state
+const isLoggingOut = ref(false);
+
+// Format member registration date
+const memberSinceText = computed(() => {
+  if (!user.value?.createdAt) return 'Member';
+  try {
+    const d = new Date(user.value.createdAt);
+    if (isNaN(d.getTime())) return 'Member';
+    const formatted = d.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    return `Member since ${formatted}`;
+  } catch {
+    return 'Member';
+  }
+});
+
+// Keep profile inputs in sync with user state
+watch(
+  user,
+  (currentUser) => {
+    if (currentUser) {
+      nameInput.value = currentUser.name || '';
+      emailInput.value = currentUser.email || '';
+    }
+  },
+  { immediate: true }
+);
+
+function switchTab(tab: 'profile' | 'security') {
+  if (isUpdatingProfile.value || isChangingPassword.value) return;
+  activeTab.value = tab;
+  profileError.value = '';
+  profileSuccess.value = '';
+  passwordError.value = '';
+  passwordSuccess.value = '';
+}
+
+function handleClose() {
+  emit('close');
+}
+
+async function handleUpdateProfile() {
+  if (isUpdatingProfile.value) return;
+  profileError.value = '';
+  profileSuccess.value = '';
+
+  const cleanName = nameInput.value.trim();
+  const cleanEmail = emailInput.value.trim();
+
+  if (!cleanName) {
+    profileError.value = 'Please enter your full name.';
+    return;
+  }
+  if (!cleanEmail) {
+    profileError.value = 'Please enter your email address.';
+    return;
+  }
+
+  isUpdatingProfile.value = true;
+  try {
+    await updateProfile({ name: cleanName, email: cleanEmail });
+    profileSuccess.value = 'Profile updated successfully.';
+  } catch (err: any) {
+    profileError.value = err?.message || err?.statusMessage || 'Failed to update profile. Please try again.';
+  } finally {
+    isUpdatingProfile.value = false;
+  }
+}
+
+async function handleChangePassword() {
+  if (isChangingPassword.value) return;
+  passwordError.value = '';
+  passwordSuccess.value = '';
+
+  if (!currentPassword.value) {
+    passwordError.value = 'Please enter your current password.';
+    return;
+  }
+  if (!newPassword.value) {
+    passwordError.value = 'Please enter a new password.';
+    return;
+  }
+  if (newPassword.value.length < 8) {
+    passwordError.value = 'New password must be at least 8 characters long.';
+    return;
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = 'New passwords do not match.';
+    return;
+  }
+
+  isChangingPassword.value = true;
+  try {
+    await changePassword(currentPassword.value, newPassword.value);
+    currentPassword.value = '';
+    newPassword.value = '';
+    confirmPassword.value = '';
+    passwordSuccess.value = 'Password changed successfully.';
+  } catch (err: any) {
+    passwordError.value = err?.message || err?.statusMessage || 'Failed to change password. Please try again.';
+  } finally {
+    isChangingPassword.value = false;
+  }
+}
+
+async function handleLogout() {
+  if (isLoggingOut.value) return;
+  isLoggingOut.value = true;
+  try {
+    await logout();
+    emit('close');
+  } catch {
+    emit('close');
+  } finally {
+    isLoggingOut.value = false;
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    handleClose();
+    return;
+  }
+
+  // Focus trap inside modal
+  if (e.key === 'Tab' && modalRef.value) {
+    const focusable = modalRef.value.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (first && last) {
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+}
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    handleClose();
+  }
+}
+
+onMounted(async () => {
+  if (typeof document !== 'undefined') {
+    previousActiveElement = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = 'hidden';
+    await nextTick();
+    if (headerCloseBtnRef.value) {
+      headerCloseBtnRef.value.focus();
+    } else if (modalRef.value) {
+      modalRef.value.focus();
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleGlobalKeydown);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleGlobalKeydown);
+  }
+  if (typeof document !== 'undefined') {
+    document.body.style.overflow = '';
+    if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+      previousActiveElement.focus();
+      previousActiveElement = null;
+    }
+  }
+});
+</script>
+
 <template>
   <Teleport to="body">
     <transition name="dialog-fade">
@@ -273,237 +504,6 @@
     </transition>
   </Teleport>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import {
-  User,
-  Mail,
-  KeyRound,
-  LogOut,
-  X,
-  Calendar,
-  Check,
-  AlertCircle,
-  Loader2,
-} from 'lucide-vue-next';
-import { useAuth } from '../composables/useAuth';
-
-const emit = defineEmits<{
-  (e: 'close'): void;
-}>();
-
-const { user, updateProfile, changePassword, logout } = useAuth();
-
-const modalRef = ref<HTMLElement | null>(null);
-const headerCloseBtnRef = ref<HTMLButtonElement | null>(null);
-let previousActiveElement: HTMLElement | null = null;
-
-const activeTab = ref<'profile' | 'security'>('profile');
-
-// Profile form state
-const nameInput = ref(user.value?.name || '');
-const emailInput = ref(user.value?.email || '');
-const isUpdatingProfile = ref(false);
-const profileSuccess = ref('');
-const profileError = ref('');
-
-// Password form state
-const currentPassword = ref('');
-const newPassword = ref('');
-const confirmPassword = ref('');
-const isChangingPassword = ref(false);
-const passwordSuccess = ref('');
-const passwordError = ref('');
-
-// Logout state
-const isLoggingOut = ref(false);
-
-// Format member registration date
-const memberSinceText = computed(() => {
-  if (!user.value?.createdAt) return 'Member';
-  try {
-    const d = new Date(user.value.createdAt);
-    if (isNaN(d.getTime())) return 'Member';
-    const formatted = d.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    return `Member since ${formatted}`;
-  } catch {
-    return 'Member';
-  }
-});
-
-// Keep profile inputs in sync with user state
-watch(
-  user,
-  (currentUser) => {
-    if (currentUser) {
-      nameInput.value = currentUser.name || '';
-      emailInput.value = currentUser.email || '';
-    }
-  },
-  { immediate: true }
-);
-
-function switchTab(tab: 'profile' | 'security') {
-  if (isUpdatingProfile.value || isChangingPassword.value) return;
-  activeTab.value = tab;
-  profileError.value = '';
-  profileSuccess.value = '';
-  passwordError.value = '';
-  passwordSuccess.value = '';
-}
-
-function handleClose() {
-  emit('close');
-}
-
-async function handleUpdateProfile() {
-  if (isUpdatingProfile.value) return;
-  profileError.value = '';
-  profileSuccess.value = '';
-
-  const cleanName = nameInput.value.trim();
-  const cleanEmail = emailInput.value.trim();
-
-  if (!cleanName) {
-    profileError.value = 'Please enter your full name.';
-    return;
-  }
-  if (!cleanEmail) {
-    profileError.value = 'Please enter your email address.';
-    return;
-  }
-
-  isUpdatingProfile.value = true;
-  try {
-    await updateProfile({ name: cleanName, email: cleanEmail });
-    profileSuccess.value = 'Profile updated successfully.';
-  } catch (err: any) {
-    profileError.value = err?.message || err?.statusMessage || 'Failed to update profile. Please try again.';
-  } finally {
-    isUpdatingProfile.value = false;
-  }
-}
-
-async function handleChangePassword() {
-  if (isChangingPassword.value) return;
-  passwordError.value = '';
-  passwordSuccess.value = '';
-
-  if (!currentPassword.value) {
-    passwordError.value = 'Please enter your current password.';
-    return;
-  }
-  if (!newPassword.value) {
-    passwordError.value = 'Please enter a new password.';
-    return;
-  }
-  if (newPassword.value.length < 8) {
-    passwordError.value = 'New password must be at least 8 characters long.';
-    return;
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = 'New passwords do not match.';
-    return;
-  }
-
-  isChangingPassword.value = true;
-  try {
-    await changePassword(currentPassword.value, newPassword.value);
-    currentPassword.value = '';
-    newPassword.value = '';
-    confirmPassword.value = '';
-    passwordSuccess.value = 'Password changed successfully.';
-  } catch (err: any) {
-    passwordError.value = err?.message || err?.statusMessage || 'Failed to change password. Please try again.';
-  } finally {
-    isChangingPassword.value = false;
-  }
-}
-
-async function handleLogout() {
-  if (isLoggingOut.value) return;
-  isLoggingOut.value = true;
-  try {
-    await logout();
-    emit('close');
-  } catch {
-    emit('close');
-  } finally {
-    isLoggingOut.value = false;
-  }
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    handleClose();
-    return;
-  }
-
-  // Focus trap inside modal
-  if (e.key === 'Tab' && modalRef.value) {
-    const focusable = modalRef.value.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable.length === 0) return;
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-
-    if (first && last) {
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }
-}
-
-function handleGlobalKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    handleClose();
-  }
-}
-
-onMounted(async () => {
-  if (typeof document !== 'undefined') {
-    previousActiveElement = document.activeElement as HTMLElement | null;
-    document.body.style.overflow = 'hidden';
-    await nextTick();
-    if (headerCloseBtnRef.value) {
-      headerCloseBtnRef.value.focus();
-    } else if (modalRef.value) {
-      modalRef.value.focus();
-    }
-  }
-  if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', handleGlobalKeydown);
-  }
-});
-
-onUnmounted(() => {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('keydown', handleGlobalKeydown);
-  }
-  if (typeof document !== 'undefined') {
-    document.body.style.overflow = '';
-    if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-      previousActiveElement.focus();
-      previousActiveElement = null;
-    }
-  }
-});
-</script>
 
 <style scoped>
 .dialog-overlay {

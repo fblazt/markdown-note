@@ -95,3 +95,44 @@ export function getReadingTime(text: string): number {
   if (words === 0) return 0;
   return Math.ceil(words / 200);
 }
+
+/**
+ * Extracts a clean first-line preview snippet from markdown text.
+ */
+export function getPreviewSnippet(content: string): string {
+  if (!content) return 'No additional text';
+  const clean = content
+    .replace(/^#+\s+/gm, '')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/`{1,3}.*?`{1,3}/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .trim();
+
+  const firstLine = clean.split('\n').filter((l) => l.trim().length > 0)[0] || '';
+  return firstLine.slice(0, 80) + (firstLine.length > 80 ? '...' : '') || 'Empty note';
+}
+
+/**
+ * Formats an ISO date string into human-friendly relative or short format.
+ */
+export function formatDate(isoString: string): string {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+

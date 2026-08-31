@@ -1,3 +1,76 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import {
+  HardDrive,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
+  Download,
+  RefreshCw,
+} from 'lucide-vue-next';
+import { useStorageQuota } from '../composables/useStorageQuota';
+import { useNotes } from '../composables/useNotes';
+import { useToast } from '../composables/useToast';
+import { exportNoteJson, downloadBlob } from '../utils/export';
+
+const { quotaInfo, isChecking, checkQuota, requestPersistence } = useStorageQuota();
+const { notes, flushAutoSave } = useNotes();
+const { showToast } = useToast();
+
+const isExpanded = ref(false);
+
+function toggleExpanded() {
+  isExpanded.value = !isExpanded.value;
+}
+
+const statusLabel = computed(() => {
+  switch (quotaInfo.value.status) {
+    case 'warning':
+      return 'Near limit';
+    case 'critical':
+      return 'Critical';
+    case 'exceeded':
+      return 'Exceeded';
+    default:
+      return '';
+  }
+});
+
+async function handleRequestPersistence() {
+  const granted = await requestPersistence();
+  if (granted) {
+    showToast({
+      title: 'Persistent Storage Granted',
+      message: 'Browser storage will not be evicted under storage pressure.',
+      type: 'success',
+    });
+  } else {
+    showToast({
+      title: 'Storage Persistence',
+      message: 'Browser persistence was not granted or is managed automatically by browser policies.',
+      type: 'info',
+    });
+  }
+}
+
+function handleExportBackup() {
+  flushAutoSave();
+  const content = exportNoteJson(notes.value);
+  downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
+  showToast({
+    title: 'Backup Exported',
+    message: `Exported ${notes.value.length} notes to notes-backup.json.`,
+    type: 'success',
+  });
+}
+
+async function handleRefresh() {
+  await checkQuota();
+}
+</script>
+
 <template>
   <div class="storage-quota-widget" :class="`status-${quotaInfo.status}`">
     <!-- Header / Summary Bar (Clickable to toggle details) -->
@@ -129,79 +202,6 @@
     </transition>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue';
-import {
-  HardDrive,
-  ChevronDown,
-  ChevronUp,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
-  Download,
-  RefreshCw,
-} from 'lucide-vue-next';
-import { useStorageQuota } from '../composables/useStorageQuota';
-import { useNotes } from '../composables/useNotes';
-import { useToast } from '../composables/useToast';
-import { exportNoteJson, downloadBlob } from '../utils/export';
-
-const { quotaInfo, isChecking, checkQuota, requestPersistence } = useStorageQuota();
-const { notes, flushAutoSave } = useNotes();
-const { showToast } = useToast();
-
-const isExpanded = ref(false);
-
-function toggleExpanded() {
-  isExpanded.value = !isExpanded.value;
-}
-
-const statusLabel = computed(() => {
-  switch (quotaInfo.value.status) {
-    case 'warning':
-      return 'Near limit';
-    case 'critical':
-      return 'Critical';
-    case 'exceeded':
-      return 'Exceeded';
-    default:
-      return '';
-  }
-});
-
-async function handleRequestPersistence() {
-  const granted = await requestPersistence();
-  if (granted) {
-    showToast({
-      title: 'Persistent Storage Granted',
-      message: 'Browser storage will not be evicted under storage pressure.',
-      type: 'success',
-    });
-  } else {
-    showToast({
-      title: 'Storage Persistence',
-      message: 'Browser persistence was not granted or is managed automatically by browser policies.',
-      type: 'info',
-    });
-  }
-}
-
-function handleExportBackup() {
-  flushAutoSave();
-  const content = exportNoteJson(notes.value);
-  downloadBlob(content, 'notes-backup.json', 'application/json;charset=utf-8');
-  showToast({
-    title: 'Backup Exported',
-    message: `Exported ${notes.value.length} notes to notes-backup.json.`,
-    type: 'success',
-  });
-}
-
-async function handleRefresh() {
-  await checkQuota();
-}
-</script>
 
 <style scoped>
 .storage-quota-widget {

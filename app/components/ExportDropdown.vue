@@ -1,106 +1,3 @@
-<template>
-  <div v-if="note" ref="dropdownRef" class="export-dropdown-wrapper">
-    <!-- Trigger Button -->
-    <button
-      type="button"
-      class="btn-action export-trigger-btn"
-      :class="{ 'btn-active': isOpen }"
-      :aria-expanded="isOpen"
-      aria-haspopup="true"
-      aria-label="Export note options"
-      title="Export note in various formats"
-      @click="toggleDropdown"
-      @keydown.escape="closeDropdown"
-    >
-      <Download :size="14" />
-      <span class="btn-text">Export</span>
-      <ChevronDown :size="12" class="chevron-icon" :class="{ 'rotate-180': isOpen }" />
-    </button>
-
-    <!-- Dropdown Menu -->
-    <transition name="dropdown-fade">
-      <div
-        v-if="isOpen"
-        class="export-menu"
-        role="menu"
-        aria-orientation="vertical"
-        @keydown.escape="closeDropdown"
-      >
-        <div class="menu-header">
-          <span>Export Note</span>
-        </div>
-
-        <button
-          type="button"
-          class="menu-item"
-          role="menuitem"
-          @click="handleExport('md')"
-        >
-          <FileText :size="15" class="item-icon item-icon-md" />
-          <div class="item-content">
-            <span class="item-title">Markdown</span>
-            <span class="item-subtitle">.md file with frontmatter</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="menu-item"
-          role="menuitem"
-          @click="handleExport('html')"
-        >
-          <FileCode :size="15" class="item-icon item-icon-html" />
-          <div class="item-content">
-            <span class="item-title">HTML Document</span>
-            <span class="item-subtitle">Standalone styled .html</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="menu-item"
-          role="menuitem"
-          @click="handleExport('txt')"
-        >
-          <AlignLeft :size="15" class="item-icon item-icon-txt" />
-          <div class="item-content">
-            <span class="item-title">Plain Text</span>
-            <span class="item-subtitle">Stripped formatting .txt</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="menu-item"
-          role="menuitem"
-          @click="handleExport('json')"
-        >
-          <Braces :size="15" class="item-icon item-icon-json" />
-          <div class="item-content">
-            <span class="item-title">JSON Data</span>
-            <span class="item-subtitle">Raw metadata & content</span>
-          </div>
-        </button>
-
-        <div class="menu-divider"></div>
-
-        <button
-          type="button"
-          class="menu-item menu-item-print"
-          role="menuitem"
-          @click="handleExport('print')"
-        >
-          <Printer :size="15" class="item-icon item-icon-print" />
-          <div class="item-content">
-            <span class="item-title">Print / PDF</span>
-            <span class="item-subtitle">Format and send to printer</span>
-          </div>
-        </button>
-      </div>
-    </transition>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import {
@@ -208,6 +105,109 @@ onUnmounted(() => {
   }
 });
 </script>
+
+<template>
+  <div v-if="note" ref="dropdownRef" class="export-dropdown-wrapper">
+    <!-- Trigger Button -->
+    <button
+      type="button"
+      class="btn-action export-trigger-btn"
+      :class="{ 'btn-active': isOpen }"
+      :aria-expanded="isOpen"
+      aria-haspopup="true"
+      aria-label="Export note options"
+      title="Export note in various formats"
+      @click="toggleDropdown"
+      @keydown.escape="closeDropdown"
+    >
+      <Download :size="14" />
+      <span class="btn-text">Export</span>
+      <ChevronDown :size="12" class="chevron-icon" :class="{ 'rotate-180': isOpen }" />
+    </button>
+
+    <!-- Dropdown Menu -->
+    <transition name="dropdown-fade">
+      <div
+        v-if="isOpen"
+        class="export-menu"
+        role="menu"
+        aria-orientation="vertical"
+        @keydown.escape="closeDropdown"
+      >
+        <div class="menu-header">
+          <span>Export Note</span>
+        </div>
+
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          @click="handleExport('md')"
+        >
+          <FileText :size="15" class="item-icon item-icon-md" />
+          <div class="item-content">
+            <span class="item-title">Markdown</span>
+            <span class="item-subtitle">.md file with frontmatter</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          @click="handleExport('html')"
+        >
+          <FileCode :size="15" class="item-icon item-icon-html" />
+          <div class="item-content">
+            <span class="item-title">HTML Document</span>
+            <span class="item-subtitle">Standalone styled .html</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          @click="handleExport('txt')"
+        >
+          <AlignLeft :size="15" class="item-icon item-icon-txt" />
+          <div class="item-content">
+            <span class="item-title">Plain Text</span>
+            <span class="item-subtitle">Stripped formatting .txt</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          @click="handleExport('json')"
+        >
+          <Braces :size="15" class="item-icon item-icon-json" />
+          <div class="item-content">
+            <span class="item-title">JSON Data</span>
+            <span class="item-subtitle">Raw metadata & content</span>
+          </div>
+        </button>
+
+        <div class="menu-divider"></div>
+
+        <button
+          type="button"
+          class="menu-item menu-item-print"
+          role="menuitem"
+          @click="handleExport('print')"
+        >
+          <Printer :size="15" class="item-icon item-icon-print" />
+          <div class="item-content">
+            <span class="item-title">Print / PDF</span>
+            <span class="item-subtitle">Format and send to printer</span>
+          </div>
+        </button>
+      </div>
+    </transition>
+  </div>
+</template>
 
 <style scoped>
 .export-dropdown-wrapper {
