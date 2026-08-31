@@ -27,7 +27,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
   });
 
   describe('resolveApiUrl and getApiBaseUrl', () => {
-    it('returns path as is when apiBaseUrl is empty', () => {
+    it('returns path as is when explicit empty string is passed as baseUrl to resolveApiUrl', () => {
       expect(resolveApiUrl('/api/notes', '')).toBe('/api/notes');
       expect(resolveApiUrl('api/notes', '')).toBe('api/notes');
     });
@@ -64,6 +64,16 @@ describe('API Client Helper (app/utils/api.ts)', () => {
     it('returns empty string when no config or env is present', () => {
       delete (globalThis as any).useRuntimeConfig;
       delete process.env.NUXT_PUBLIC_API_BASE_URL;
+      expect(getApiBaseUrl()).toBe('');
+      expect(resolveApiUrl('/api/notes')).toBe('/api/notes');
+    });
+
+    it('returns empty string when useRuntimeConfig returns empty string', () => {
+      (globalThis as any).useRuntimeConfig = () => ({
+        public: {
+          apiBaseUrl: '',
+        },
+      });
       expect(getApiBaseUrl()).toBe('');
       expect(resolveApiUrl('/api/notes')).toBe('/api/notes');
     });
@@ -197,7 +207,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        text: async () => JSON.stringify(errorPayload),
+        json: async () => errorPayload,
       });
       globalThis.fetch = fetchMock;
 
@@ -230,7 +240,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 401,
-        text: async () => JSON.stringify(errorPayload),
+        json: async () => errorPayload,
       });
       globalThis.fetch = fetchMock;
 
@@ -249,7 +259,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
-        text: async () => JSON.stringify(errorPayload),
+        json: async () => errorPayload,
       });
       globalThis.fetch = fetchMock;
 
@@ -272,7 +282,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
-        text: async () => JSON.stringify(errorPayload),
+        json: async () => errorPayload,
       });
       globalThis.fetch = fetchMock;
 
@@ -290,7 +300,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 403,
-        text: async () => JSON.stringify(errorPayload),
+        json: async () => errorPayload,
       });
       globalThis.fetch = fetchMock;
 
@@ -307,7 +317,9 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 502,
-        text: async () => '<html><body>Bad Gateway</body></html>',
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON at position 0');
+        },
       });
       globalThis.fetch = fetchMock;
 
@@ -327,7 +339,7 @@ describe('API Client Helper (app/utils/api.ts)', () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
-        text: async () => {
+        json: async () => {
           throw new Error('Socket closed prematurely');
         },
       });

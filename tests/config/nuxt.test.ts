@@ -13,6 +13,6 @@ describe('Nuxt Configuration (nuxt.config.ts)', () => {
   it('should configure runtimeConfig.public.apiBaseUrl with default empty string', () => {
     expect(nuxtConfig.runtimeConfig).toBeDefined();
     expect(nuxtConfig.runtimeConfig?.public).toBeDefined();
-    expect(typeof nuxtConfig.runtimeConfig?.public?.apiBaseUrl).toBe('string');
+    expect(nuxtConfig.runtimeConfig?.public?.apiBaseUrl).toBe(process.env.NUXT_PUBLIC_API_BASE_URL || '');
   });
 });

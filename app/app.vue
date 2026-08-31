@@ -1,5 +1,17 @@
 <template>
-  <div class="app-container">
+  <!-- Startup Loading Screen -->
+  <div v-if="isInitializing" class="app-loading-screen">
+    <div class="loading-spinner-wrapper">
+      <Loader2 :size="36" class="loading-spinner" />
+      <span class="loading-label">Loading Markdown Notes...</span>
+    </div>
+  </div>
+
+  <!-- Authentication Gate -->
+  <AuthGate v-else-if="!isAuthenticated" @authenticated="handleAuthenticated" />
+
+  <!-- Main Workspace -->
+  <div v-else class="app-container">
     <!-- App Header -->
     <header class="app-header">
       <div class="header-left">
@@ -169,11 +181,14 @@ import {
   Plus,
   ChevronLeft,
   HardDrive,
+  Loader2,
 } from 'lucide-vue-next';
+import { useAuth } from './composables/useAuth';
 import { useNotes } from './composables/useNotes';
 import { useTheme } from './composables/useTheme';
 import { useStorageQuota } from './composables/useStorageQuota';
 import { getWordCount, getCharCount, getReadingTime } from './utils/markdown';
+import AuthGate from './components/AuthGate.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import NoteEditor from './components/NoteEditor.vue';
 import NotePreview from './components/NotePreview.vue';
@@ -181,6 +196,12 @@ import ThemeToggle from './components/ThemeToggle.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import StorageAlertBanner from './components/StorageAlertBanner.vue';
+
+const {
+  isAuthenticated,
+  isInitializing,
+  initAuth,
+} = useAuth();
 
 const {
   notes,
@@ -197,6 +218,7 @@ const {
 } = useNotes();
 
 const { quotaInfo } = useStorageQuota();
+const { initTheme } = useTheme();
 
 const isEditorActive = computed(() => {
   if (isMobile.value) {
@@ -224,7 +246,9 @@ const readingTime = computed(() => {
   return activeNote.value ? getReadingTime(activeNote.value.content) : 0;
 });
 
-const { initTheme } = useTheme();
+async function handleAuthenticated() {
+  await fetchNotes();
+}
 
 async function handleCreateNote() {
   await createNote({
@@ -235,6 +259,7 @@ async function handleCreateNote() {
 }
 
 function handleGlobalKeydown(e: KeyboardEvent) {
+  if (!isAuthenticated.value) return;
   // Ctrl+N or Cmd+N: create new note
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
     e.preventDefault();
@@ -245,7 +270,10 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 onMounted(async () => {
   initTheme();
   checkMobile();
-  await fetchNotes();
+  await initAuth();
+  if (isAuthenticated.value) {
+    await fetchNotes();
+  }
   window.addEventListener('keydown', handleGlobalKeydown);
 });
 
@@ -255,6 +283,43 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.app-loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  height: 100dvh;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.loading-spinner-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  color: var(--accent-primary);
+  animation: loading-spin 1s linear infinite;
+}
+
+.loading-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+@keyframes loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .header-left {
   display: flex;
   align-items: center;
