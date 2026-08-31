@@ -15,4 +15,14 @@ describe('Nuxt Configuration (nuxt.config.ts)', () => {
     expect(nuxtConfig.runtimeConfig?.public).toBeDefined();
     expect(nuxtConfig.runtimeConfig?.public?.apiBaseUrl).toBe(process.env.NUXT_PUBLIC_API_BASE_URL || '');
   });
+
+  it('should configure nitro.devProxy for /api backend proxying', () => {
+    expect(nuxtConfig.nitro).toBeDefined();
+    expect(nuxtConfig.nitro?.devProxy).toBeDefined();
+    expect(nuxtConfig.nitro?.devProxy?.['/api']).toEqual({
+      target: process.env.BACKEND_PROXY_URL || 'http://localhost:8080',
+      changeOrigin: true,
+      credentials: true,
+    });
+  });
 });

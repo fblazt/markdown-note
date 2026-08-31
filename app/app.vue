@@ -147,6 +147,9 @@
     <!-- Footer / Status Bar -->
     <footer class="status-bar">
       <div class="status-right">
+        <SyncStatusBadge />
+        <span class="status-separator status-sync-separator">•</span>
+
         <template v-if="activeNote">
           <span class="status-stat">{{ wordCount }} {{ wordCount === 1 ? 'word' : 'words' }}</span>
           <span class="status-separator status-stat-extra">•</span>
@@ -183,7 +186,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import {
   PanelLeft,
   Columns2,
@@ -199,6 +202,7 @@ import { useAuth } from './composables/useAuth';
 import { useNotes } from './composables/useNotes';
 import { useTheme } from './composables/useTheme';
 import { useStorageQuota } from './composables/useStorageQuota';
+import { useSync } from './composables/useSync';
 import { getWordCount, getCharCount, getReadingTime } from './utils/markdown';
 import AuthGate from './components/AuthGate.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
@@ -209,6 +213,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import StorageAlertBanner from './components/StorageAlertBanner.vue';
 import ProfileModal from './components/ProfileModal.vue';
+import SyncStatusBadge from './components/SyncStatusBadge.vue';
 
 const isProfileOpen = ref(false);
 
@@ -234,6 +239,7 @@ const {
 
 const { quotaInfo } = useStorageQuota();
 const { initTheme } = useTheme();
+const { initSSE, closeSSE } = useSync();
 
 const isEditorActive = computed(() => {
   if (isMobile.value) {
@@ -263,6 +269,7 @@ const readingTime = computed(() => {
 
 async function handleAuthenticated() {
   await fetchNotes();
+  initSSE();
 }
 
 async function handleCreateNote() {
@@ -282,17 +289,25 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+watch(isAuthenticated, (authed) => {
+  if (!authed) {
+    closeSSE();
+  }
+});
+
 onMounted(async () => {
   initTheme();
   checkMobile();
   await initAuth();
   if (isAuthenticated.value) {
     await fetchNotes();
+    initSSE();
   }
   window.addEventListener('keydown', handleGlobalKeydown);
 });
 
 onUnmounted(() => {
+  closeSSE();
   window.removeEventListener('keydown', handleGlobalKeydown);
 });
 </script>
