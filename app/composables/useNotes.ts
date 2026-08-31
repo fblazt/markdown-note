@@ -2,6 +2,8 @@ import { ref, computed, watch } from 'vue';
 import type { Note, CreateNoteDTO, UpdateNoteDTO, FolderInfo, FolderTreeNode, SaveStatus } from '../../shared/types/note';
 import { useStorageQuota } from './useStorageQuota';
 import { useToast } from './useToast';
+import { useAuth } from './useAuth';
+import { useSync } from './useSync';
 import { exportNoteJson, downloadBlob } from '../utils/export';
 import {
   getAllNotes,
@@ -14,7 +16,6 @@ import {
   updateNote as dbUpdateNote,
   deleteNote as dbDeleteNote,
   restoreNote as dbRestoreNote,
-  seedInitialData,
 } from '../utils/db';
 
 function isQuotaExceededError(err: unknown): boolean {
@@ -124,6 +125,10 @@ async function updateNoteStandalone(id: string, dto: UpdateNoteDTO): Promise<Not
       }
     }
 
+    try {
+      useSync().triggerDebouncedSync();
+    } catch {}
+
     return updated;
   } catch (err) {
     console.error(`Failed to update note ${id}:`, err);
@@ -191,6 +196,15 @@ if (typeof window !== 'undefined') {
       }
     });
   }
+
+  window.addEventListener('notes-synced', async () => {
+    try {
+      const data = await getAllNotes();
+      const folderData = await getAllFolders();
+      folders.value = folderData;
+      notes.value = data;
+    } catch {}
+  });
 }
 
 function buildFolderTree(folderList: FolderInfo[], notesList: Note[]): FolderTreeNode[] {
@@ -414,6 +428,10 @@ export function useNotes() {
         }
       }
 
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return true;
     } catch (err) {
       console.error('Failed to create folder:', err);
@@ -463,6 +481,11 @@ export function useNotes() {
       }
 
       await fetchFolders();
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return true;
     } catch (err) {
       console.error(`Failed to rename folder "${oldName}" to "${newName}":`, err);
@@ -519,6 +542,11 @@ export function useNotes() {
       }
 
       await fetchFolders();
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return true;
     } catch (err) {
       console.error(`Failed to move folder "${sourcePath}" to "${targetParentPath}":`, err);
@@ -574,6 +602,11 @@ export function useNotes() {
         selectedFolder.value = null;
       }
       await fetchFolders();
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return true;
     } catch (err) {
       console.error(`Failed to delete folder "${name}":`, err);
@@ -600,7 +633,6 @@ export function useNotes() {
   async function fetchNotes(): Promise<void> {
     isLoading.value = true;
     try {
-      await seedInitialData();
       const [data] = await Promise.all([
         getAllNotes(),
         fetchFolders(),
@@ -637,6 +669,16 @@ export function useNotes() {
           } catch {}
         }
       }
+
+      // Background delta synchronization if authenticated
+      try {
+        const { isAuthenticated, isOfflineAuthed } = useAuth();
+        if (isAuthenticated.value && !isOfflineAuthed.value) {
+          useSync().sync().catch((syncErr) => {
+            console.error('Background sync failed:', syncErr);
+          });
+        }
+      } catch {}
     } catch (err) {
       console.error('Failed to fetch notes:', err);
     } finally {
@@ -736,6 +778,10 @@ export function useNotes() {
         }
       }
 
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return created;
     } catch (err) {
       console.error('Failed to create note:', err);
@@ -793,6 +839,10 @@ export function useNotes() {
         }
         await fetchFolders();
       }
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
 
       return updated;
     } catch (err) {
@@ -885,6 +935,11 @@ export function useNotes() {
         const { checkQuota } = useStorageQuota();
         await checkQuota();
       } catch {}
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
+
       return true;
     } catch (err) {
       console.error(`Failed to delete note ${id}:`, err);
@@ -915,6 +970,10 @@ export function useNotes() {
         expandedFolders.value.push(restored.folder);
       }
       await fetchFolders();
+
+      try {
+        useSync().triggerDebouncedSync();
+      } catch {}
 
       return restored;
     } catch (err) {

@@ -342,6 +342,21 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
   describe('logout & local purge', () => {
     it('calls logout API, resets auth state, clears localStorage, and purges database tables', async () => {
       // Seed some data in db first
+      await db.notes.add({
+        id: 'test-note-1',
+        title: 'Test Note',
+        content: 'Content',
+        tags: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        syncStatus: 'synced',
+      });
+      await db.folders.add({
+        name: 'Test Folder',
+        deletedAt: null,
+        syncStatus: 'synced',
+      });
       expect(await db.notes.count()).toBeGreaterThan(0);
       expect(await db.folders.count()).toBeGreaterThan(0);
 
@@ -378,6 +393,16 @@ describe('Composable: useAuth (app/composables/useAuth.ts)', () => {
     });
 
     it('still completes local purge even if server logout request fails', async () => {
+      await db.notes.add({
+        id: 'test-note-1',
+        title: 'Test Note',
+        content: 'Content',
+        tags: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        syncStatus: 'synced',
+      });
       expect(await db.notes.count()).toBeGreaterThan(0);
       localStorageStore['last_auth_user'] = JSON.stringify(mockUser);
 

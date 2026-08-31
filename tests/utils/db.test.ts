@@ -14,13 +14,10 @@ import {
   renameFolder,
   deleteFolder,
   moveFolder,
-  seedInitialData,
   resetDb,
   normalizeFolderPath,
-  INITIAL_FOLDERS,
-  SEED_NOTES,
 } from '../../app/utils/db';
-import type { SyncMutation, SyncMeta } from '../../shared/types/note';
+import type { Note, SyncMutation, SyncMeta } from '../../shared/types/note';
 
 describe('Database Utility (Dexie client-side IndexedDB)', () => {
   beforeEach(async () => {
@@ -37,41 +34,60 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
   });
 
-  describe('Database Seeding & Reset', () => {
-    it('populates initial seed notes and folders with syncStatus synced and deletedAt null on resetDb', async () => {
+  describe('Database Reset & Clear', () => {
+    it('resetDb clears all 4 tables (notes, folders, mutationQueue, syncMeta)', async () => {
+      // Seed some test data first
+      await createNote({ title: 'Test Note', content: 'Content', folder: 'Work' });
+      await createFolder('Archive');
+      await db.syncMeta.put({ key: 'testKey', value: 'testVal' });
+      expect(await db.notes.count()).toBeGreaterThan(0);
+      expect(await db.folders.count()).toBeGreaterThan(0);
+      expect(await db.mutationQueue.count()).toBeGreaterThan(0);
+      expect(await db.syncMeta.count()).toBeGreaterThan(0);
+
+      await resetDb();
+
       const notes = await getAllNotes();
       const folders = await getAllFolders();
-      const folderRecords = await db.folders.toArray();
-
-      expect(notes.length).toBe(SEED_NOTES.length);
-      for (const note of notes) {
-        expect(note.deletedAt).toBeNull();
-        expect(note.syncStatus).toBe('synced');
-      }
-
-      expect(folders.some((f) => f.name === 'Guides')).toBe(true);
-      expect(folders.some((f) => f.name === 'Projects')).toBe(true);
-      expect(folders.some((f) => f.name === 'Code')).toBe(true);
-
-      for (const folder of folderRecords) {
-        expect(folder.deletedAt).toBeNull();
-        expect(folder.syncStatus).toBe('synced');
-      }
-
-      // mutationQueue and syncMeta must be empty
       const mutations = await db.mutationQueue.toArray();
       const meta = await db.syncMeta.toArray();
+
+      expect(notes.length).toBe(0);
+      expect(folders.length).toBe(0);
       expect(mutations.length).toBe(0);
       expect(meta.length).toBe(0);
+      expect(await db.notes.count()).toBe(0);
+      expect(await db.folders.count()).toBe(0);
     });
 
-    it('seedInitialData does not overwrite existing data when db is not empty', async () => {
-      await createNote({ title: 'Extra Note' });
-      const initialCount = (await getAllNotes()).length;
+    it('clearAllUserData clears all 4 tables without leaving any records', async () => {
+      // Add records into all 4 tables
+      await createNote({ title: 'Note To Clear' });
+      await createFolder('Folder To Clear');
+      await db.mutationQueue.add({
+        id: 'mut-clear-test',
+        entityType: 'note',
+        entityId: 'note-xyz',
+        action: 'upsert',
+        data: { title: 'To Clear' },
+        createdAt: '2026-08-30T00:00:00.000Z',
+      });
+      await db.syncMeta.put({
+        key: 'syncStatus',
+        value: 'active',
+      });
 
-      await seedInitialData();
-      const afterCount = (await getAllNotes()).length;
-      expect(afterCount).toBe(initialCount);
+      expect(await db.notes.count()).toBeGreaterThan(0);
+      expect(await db.folders.count()).toBeGreaterThan(0);
+      expect(await db.mutationQueue.count()).toBeGreaterThan(0);
+      expect(await db.syncMeta.count()).toBeGreaterThan(0);
+
+      await db.clearAllUserData();
+
+      expect(await db.notes.count()).toBe(0);
+      expect(await db.folders.count()).toBe(0);
+      expect(await db.mutationQueue.count()).toBe(0);
+      expect(await db.syncMeta.count()).toBe(0);
     });
   });
 
@@ -155,9 +171,8 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('clearAllUserData clears all 4 tables without reseeding', async () => {
-      // Ensure seed notes and folders exist
-      expect(await db.notes.count()).toBeGreaterThan(0);
-      expect(await db.folders.count()).toBeGreaterThan(0);
+      await createNote({ title: 'Temp Note' });
+      await createFolder('Temp Folder');
 
       // Add records into mutationQueue and syncMeta
       await db.mutationQueue.add({
@@ -173,7 +188,9 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
         value: 'active',
       });
 
-      expect(await db.mutationQueue.count()).toBe(1);
+      expect(await db.notes.count()).toBe(1);
+      expect(await db.folders.count()).toBe(1);
+      expect(await db.mutationQueue.count()).toBeGreaterThanOrEqual(1);
       expect(await db.syncMeta.count()).toBe(1);
 
       // Call clearAllUserData
@@ -277,8 +294,14 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
 
   describe('Note CRUD operations', () => {
     it('getAllNotes returns non-deleted notes sorted by updatedAt descending', async () => {
+      await createNote({ title: 'Note 1' });
+      await new Promise((r) => setTimeout(r, 10));
+      await createNote({ title: 'Note 2' });
+      await new Promise((r) => setTimeout(r, 10));
+      await createNote({ title: 'Note 3' });
+
       const notes = await getAllNotes();
-      expect(notes.length).toBeGreaterThanOrEqual(3);
+      expect(notes.length).toBe(3);
 
       for (let i = 0; i < notes.length - 1; i++) {
         const timeA = new Date(notes[i]!.updatedAt).getTime();
@@ -288,22 +311,29 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('getAllNotes ignores soft-deleted notes', async () => {
+      const note1 = await createNote({ title: 'Active Note' });
+      const note2 = await createNote({ title: 'To Delete Note' });
+
       const initialCount = (await getAllNotes()).length;
-      await deleteNote('seed-welcome-guide');
+      expect(initialCount).toBe(2);
+
+      await deleteNote(note2.id);
 
       const afterNotes = await getAllNotes();
-      expect(afterNotes.length).toBe(initialCount - 1);
-      expect(afterNotes.some((n) => n.id === 'seed-welcome-guide')).toBe(false);
+      expect(afterNotes.length).toBe(1);
+      expect(afterNotes.some((n) => n.id === note2.id)).toBe(false);
+      expect(afterNotes.some((n) => n.id === note1.id)).toBe(true);
     });
 
     it('getNoteById returns note if found and not deleted, null otherwise', async () => {
-      const welcomeNote = await getNoteById('seed-welcome-guide');
+      const created = await createNote({ title: 'Welcome Guide' });
+      const welcomeNote = await getNoteById(created.id);
       expect(welcomeNote).not.toBeNull();
-      expect(welcomeNote?.title).toContain('Welcome');
+      expect(welcomeNote?.title).toBe('Welcome Guide');
 
       // Soft delete note
-      await deleteNote('seed-welcome-guide');
-      const deletedFetched = await getNoteById('seed-welcome-guide');
+      await deleteNote(created.id);
+      const deletedFetched = await getNoteById(created.id);
       expect(deletedFetched).toBeNull();
 
       const nonExistent = await getNoteById('non-existent-id');
@@ -353,10 +383,15 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('updateNote updates fields, sets syncStatus pending, auto-registers new folder, and logs upsert mutation with baseUpdatedAt', async () => {
-      const existing = await db.notes.get('seed-welcome-guide');
-      const originalUpdatedAt = existing!.updatedAt;
+      const created = await createNote({
+        title: 'Initial Title',
+        content: 'Initial content',
+        tags: ['guide'],
+        folder: 'Guides',
+      });
+      const originalUpdatedAt = created.updatedAt;
 
-      const updated = await updateNote('seed-welcome-guide', {
+      const updated = await updateNote(created.id, {
         title: 'Updated Welcome Guide',
         content: 'New content here',
         tags: ['updated', 'guide'],
@@ -376,36 +411,38 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
 
       // Verify mutationQueue has upsert with baseUpdatedAt
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-welcome-guide'
+        (m) => m.entityType === 'note' && m.entityId === created.id
       );
-      expect(noteMutations.length).toBe(1);
-      expect(noteMutations[0]?.action).toBe('upsert');
-      expect(noteMutations[0]?.baseUpdatedAt).toBe(originalUpdatedAt);
-      expect((noteMutations[0]?.data as Note).title).toBe('Updated Welcome Guide');
+      const updateMutation = noteMutations.find((m) => (m.data as Note).title === 'Updated Welcome Guide');
+      expect(updateMutation).toBeDefined();
+      expect(updateMutation?.action).toBe('upsert');
+      expect(updateMutation?.baseUpdatedAt).toBe(originalUpdatedAt);
+      expect((updateMutation?.data as Note).title).toBe('Updated Welcome Guide');
     });
 
     it('updateNote returns null for non-existent or soft-deleted note', async () => {
       const result = await updateNote('unknown-id', { title: 'Test' });
       expect(result).toBeNull();
 
-      await deleteNote('seed-welcome-guide');
-      const deletedResult = await updateNote('seed-welcome-guide', { title: 'Should Fail' });
+      const created = await createNote({ title: 'Will Delete' });
+      await deleteNote(created.id);
+      const deletedResult = await updateNote(created.id, { title: 'Should Fail' });
       expect(deletedResult).toBeNull();
     });
 
     it('deleteNote performs soft delete with tombstone and logs delete mutation with baseUpdatedAt', async () => {
-      const existing = await db.notes.get('seed-welcome-guide');
-      const originalUpdatedAt = existing!.updatedAt;
+      const created = await createNote({ title: 'To Delete' });
+      const originalUpdatedAt = created.updatedAt;
 
-      const success = await deleteNote('seed-welcome-guide');
+      const success = await deleteNote(created.id);
       expect(success).toBe(true);
 
       // getNoteById returns null for soft-deleted note
-      const fetched = await getNoteById('seed-welcome-guide');
+      const fetched = await getNoteById(created.id);
       expect(fetched).toBeNull();
 
       // Dexie table contains tombstone record
-      const rawNote = await db.notes.get('seed-welcome-guide');
+      const rawNote = await db.notes.get(created.id);
       expect(rawNote).toBeDefined();
       expect(rawNote?.deletedAt).not.toBeNull();
       expect(typeof rawNote?.deletedAt).toBe('string');
@@ -413,39 +450,41 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
 
       // mutationQueue contains delete mutation
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-welcome-guide'
+        (m) => m.entityType === 'note' && m.entityId === created.id && m.action === 'delete'
       );
       expect(noteMutations.length).toBe(1);
       expect(noteMutations[0]?.action).toBe('delete');
       expect(noteMutations[0]?.baseUpdatedAt).toBe(originalUpdatedAt);
 
       // Subsequent delete returns false
-      const fail = await deleteNote('seed-welcome-guide');
+      const fail = await deleteNote(created.id);
       expect(fail).toBe(false);
     });
 
     it('restoreNote clears deletedAt, sets syncStatus pending, and enqueues upsert mutation', async () => {
-      await deleteNote('seed-welcome-guide');
-      const tombstone = await db.notes.get('seed-welcome-guide');
+      const created = await createNote({ title: 'To Restore' });
+      await deleteNote(created.id);
+      const tombstone = await db.notes.get(created.id);
       const tombstoneUpdatedAt = tombstone!.updatedAt;
 
-      const restored = await restoreNote('seed-welcome-guide');
+      const restored = await restoreNote(created.id);
       expect(restored).not.toBeNull();
-      expect(restored?.id).toBe('seed-welcome-guide');
+      expect(restored?.id).toBe(created.id);
       expect(restored?.deletedAt).toBeNull();
       expect(restored?.syncStatus).toBe('pending');
 
-      const fetched = await getNoteById('seed-welcome-guide');
+      const fetched = await getNoteById(created.id);
       expect(fetched).not.toBeNull();
       expect(fetched?.title).toBe(restored?.title);
 
       // mutationQueue should now have the restore upsert mutation
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-welcome-guide'
+        (m) => m.entityType === 'note' && m.entityId === created.id
       );
-      // Had delete mutation, now also has upsert mutation
-      expect(noteMutations.length).toBe(2);
-      const restoreMutation = noteMutations.find((m) => m.action === 'upsert');
+      expect(noteMutations.length).toBe(3);
+      const restoreMutation = noteMutations.find(
+        (m) => m.action === 'upsert' && m.baseUpdatedAt === tombstoneUpdatedAt
+      );
       expect(restoreMutation).toBeDefined();
       expect(restoreMutation?.baseUpdatedAt).toBe(tombstoneUpdatedAt);
       expect((restoreMutation?.data as Note).deletedAt).toBeNull();
@@ -459,6 +498,14 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
 
   describe('Folder Hierarchy & Operations', () => {
     it('getAllFolders returns folders with accurate direct note counts excluding deleted notes', async () => {
+      await createFolder('Guides');
+      await createFolder('Projects');
+      await createFolder('Code');
+
+      const guideNote = await createNote({ title: 'Guide 1', folder: 'Guides' });
+      await createNote({ title: 'Project 1', folder: 'Projects' });
+      await createNote({ title: 'Code 1', folder: 'Code' });
+
       const folders = await getAllFolders();
       const guides = folders.find((f) => f.name === 'Guides');
       const projects = folders.find((f) => f.name === 'Projects');
@@ -469,7 +516,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       expect(code?.noteCount).toBe(1);
 
       // Soft delete note in Guides
-      await deleteNote('seed-welcome-guide');
+      await deleteNote(guideNote.id);
       const updatedFolders = await getAllFolders();
       const updatedGuides = updatedFolders.find((f) => f.name === 'Guides');
       expect(updatedGuides?.noteCount).toBe(0);
@@ -500,6 +547,11 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('renameFolder renames folder, cascades to subfolders & notes, and enqueues folder/note mutations', async () => {
+      await createFolder('Projects');
+      const roadmap = await createNote({
+        title: 'Project Roadmap',
+        folder: 'Projects',
+      });
       await createNote({
         title: 'Roadmap Child',
         folder: 'Projects/Frontend',
@@ -513,8 +565,8 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       expect(folders.some((f) => f.name === 'Workspace/Frontend')).toBe(true);
       expect(folders.some((f) => f.name === 'Projects')).toBe(false);
 
-      const roadmap = await getNoteById('seed-project-roadmap');
-      expect(roadmap?.folder).toBe('Workspace');
+      const updatedRoadmap = await getNoteById(roadmap.id);
+      expect(updatedRoadmap?.folder).toBe('Workspace');
 
       const allNotes = await getAllNotes();
       const child = allNotes.find((n) => n.title === 'Roadmap Child');
@@ -527,17 +579,20 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
 
       // Verify note upsert mutations
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-project-roadmap'
+        (m) => m.entityType === 'note' && m.entityId === roadmap.id
       );
       expect(noteMutations.some((m) => m.action === 'upsert' && (m.data as Note).folder === 'Workspace')).toBe(true);
     });
 
     it('renameFolder prevents cycle (renaming into descendant path)', async () => {
+      await createFolder('Projects');
       const success = await renameFolder('Projects', 'Projects/Nested');
       expect(success).toBe(false);
     });
 
     it('renameFolder prevents renaming to an already existing distinct folder', async () => {
+      await createFolder('Guides');
+      await createFolder('Projects');
       const success = await renameFolder('Guides', 'Projects');
       expect(success).toBe(false);
     });
@@ -548,13 +603,16 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('deleteFolder with deleteNotes=false unlinks notes and enqueues upsert mutations for notes', async () => {
+      await createFolder('Guides');
+      const guideNote = await createNote({ title: 'Welcome Guide', folder: 'Guides' });
+
       const success = await deleteFolder('Guides', false);
       expect(success).toBe(true);
 
       const folders = await getAllFolders();
       expect(folders.some((f) => f.name === 'Guides')).toBe(false);
 
-      const note = await getNoteById('seed-welcome-guide');
+      const note = await getNoteById(guideNote.id);
       expect(note).not.toBeNull();
       expect(note?.folder).toBeUndefined();
 
@@ -565,28 +623,31 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       expect(folderMutations.some((m) => m.action === 'delete')).toBe(true);
 
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-welcome-guide'
+        (m) => m.entityType === 'note' && m.entityId === guideNote.id
       );
       expect(noteMutations.some((m) => m.action === 'upsert' && !(m.data as Note).folder)).toBe(true);
     });
 
     it('deleteFolder with deleteNotes=true soft deletes folder and all nested notes with delete mutations', async () => {
+      await createFolder('Projects');
+      const roadmap = await createNote({ title: 'Project Roadmap', folder: 'Projects' });
+
       const success = await deleteFolder('Projects', true);
       expect(success).toBe(true);
 
       const folders = await getAllFolders();
       expect(folders.some((f) => f.name === 'Projects')).toBe(false);
 
-      const note = await getNoteById('seed-project-roadmap');
+      const note = await getNoteById(roadmap.id);
       expect(note).toBeNull();
 
       // Check Dexie raw note record is soft deleted
-      const rawNote = await db.notes.get('seed-project-roadmap');
+      const rawNote = await db.notes.get(roadmap.id);
       expect(rawNote?.deletedAt).not.toBeNull();
 
       // Check note delete mutation
       const noteMutations = (await db.mutationQueue.toArray()).filter(
-        (m) => m.entityType === 'note' && m.entityId === 'seed-project-roadmap'
+        (m) => m.entityType === 'note' && m.entityId === roadmap.id
       );
       expect(noteMutations.some((m) => m.action === 'delete')).toBe(true);
     });
@@ -597,6 +658,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('moveFolder moves folder under target parent path', async () => {
+      await createFolder('Guides');
       await createFolder('Projects/Frontend');
       const success = await moveFolder('Projects/Frontend', 'Guides');
       expect(success).toBe(true);
@@ -616,6 +678,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
     });
 
     it('moveFolder rejects moving folder into itself or its own descendant', async () => {
+      await createFolder('Projects');
       const res1 = await moveFolder('Projects', 'Projects');
       expect(res1).toBe(false);
 

@@ -2,8 +2,47 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotes } from '../../app/composables/useNotes';
 import { useToast } from '../../app/composables/useToast';
 import { useStorageQuota } from '../../app/composables/useStorageQuota';
-import { resetDb, getNoteById, getAllFolders, getAllNotes } from '../../app/utils/db';
+import { resetDb, getNoteById, getAllFolders, getAllNotes, db } from '../../app/utils/db';
 import * as dbUtils from '../../app/utils/db';
+import type { Note } from '../../shared/types/note';
+
+const TEST_FOLDERS = ['Guides', 'Projects', 'Code'];
+
+const TEST_NOTES: Note[] = [
+  {
+    id: 'seed-welcome-guide',
+    title: '✨ Welcome to Markdown Notes',
+    content: `# Welcome to Markdown Notes\n\nA blazing fast, distraction-free markdown note-taking app.\n\nMarkdown Syntax Cheat Sheet\nguides and features`,
+    tags: ['guide', 'markdown', 'welcome', 'mermaid', 'diagram'],
+    folder: 'Guides',
+    createdAt: '2025-01-01T08:00:00.000Z',
+    updatedAt: '2025-01-01T08:00:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
+  },
+  {
+    id: 'seed-project-roadmap',
+    title: '🗺️ Project Architecture & Roadmap',
+    content: `# Markdown Note App Architecture\n\nProject Architecture & Roadmap overview`,
+    tags: ['architecture', 'roadmap', 'nuxt', 'diagram'],
+    folder: 'Projects',
+    createdAt: '2025-01-02T10:30:00.000Z',
+    updatedAt: '2025-01-02T11:00:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
+  },
+  {
+    id: 'seed-code-snippets',
+    title: '⚡ Useful Code Snippets',
+    content: `# Useful TypeScript & Nuxt Snippets\n\nsnippets and code examples`,
+    tags: ['typescript', 'snippets', 'code'],
+    folder: 'Code',
+    createdAt: '2025-01-03T14:15:00.000Z',
+    updatedAt: '2025-01-03T14:15:00.000Z',
+    deletedAt: null,
+    syncStatus: 'synced',
+  },
+];
 
 describe('Composable: useNotes', () => {
   let composable: ReturnType<typeof useNotes>;
@@ -27,6 +66,8 @@ describe('Composable: useNotes', () => {
     vi.stubGlobal('localStorage', mockLocalStorage);
 
     await resetDb();
+    await db.folders.bulkAdd(TEST_FOLDERS.map((name) => ({ name, deletedAt: null, syncStatus: 'synced' })));
+    await db.notes.bulkAdd(TEST_NOTES);
     composable = useNotes();
     await composable.fetchNotes();
     composable.expandedFolders.value = ['Guides', 'Projects', 'Code'];
