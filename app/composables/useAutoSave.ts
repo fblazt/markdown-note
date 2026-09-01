@@ -1,7 +1,5 @@
-import { ref, type Ref } from 'vue';
+import type { Ref } from 'vue';
 import type { Note, UpdateNoteDTO, SaveStatus } from '../../shared/types/note';
-import { useStorageQuota } from './useStorageQuota';
-import { useToast } from './useToast';
 import { exportNoteJson, downloadBlob } from '../utils/export';
 
 export function isQuotaExceededError(err: unknown): boolean {

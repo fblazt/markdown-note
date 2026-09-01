@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { HardDrive } from 'lucide-vue-next';
-import { useNotes } from '../../composables/useNotes';
-import { useStorageQuota } from '../../composables/useStorageQuota';
 import { getWordCount, getCharCount, getReadingTime } from '../../utils/markdown';
-import SyncStatusBadge from '../SyncStatusBadge.vue';
 
 const { notes, activeNote } = useNotes();
 const { quotaInfo } = useStorageQuota();

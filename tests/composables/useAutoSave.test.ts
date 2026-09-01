@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ref } from 'vue';
 import { useAutoSave, isQuotaExceededError } from '../../app/composables/useAutoSave';
-import type { Note, UpdateNoteDTO } from '../../shared/types/note';
+import type { Note } from '../../shared/types/note';
 
 describe('Composable: useAutoSave', () => {
   let localStorageStore: Record<string, string> = {};

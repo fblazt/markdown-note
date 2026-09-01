@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useSync } from '../composables/useSync';
-
 const {
   syncState,
   pendingCount,

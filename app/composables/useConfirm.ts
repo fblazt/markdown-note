@@ -1,5 +1,3 @@
-import { ref, readonly, type Ref } from 'vue';
-
 export interface ConfirmOptions {
   title?: string;
   message: string;

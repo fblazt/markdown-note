@@ -1,4 +1,28 @@
 import 'fake-indexeddb/auto';
+import * as vue from 'vue';
+
+// 1. Assign Vue core APIs to globalThis FIRST so module evaluation can use them
+Object.assign(globalThis, vue);
+
+(globalThis as any).useRuntimeConfig = () => ({
+  public: {
+    apiBaseUrl: '',
+  },
+});
+
+// 2. Dynamically import and assign project composables to globalThis in dependency order
+Object.assign(globalThis, await import('../app/composables/useToast'));
+Object.assign(globalThis, await import('../app/composables/useTheme'));
+Object.assign(globalThis, await import('../app/composables/useConfirm'));
+Object.assign(globalThis, await import('../app/composables/useDragAndDrop'));
+Object.assign(globalThis, await import('../app/composables/useWorkspaceLayout'));
+Object.assign(globalThis, await import('../app/composables/useStorageQuota'));
+Object.assign(globalThis, await import('../app/composables/useAuth'));
+Object.assign(globalThis, await import('../app/composables/useSync'));
+Object.assign(globalThis, await import('../app/composables/useFolders'));
+Object.assign(globalThis, await import('../app/composables/useNoteFilter'));
+Object.assign(globalThis, await import('../app/composables/useAutoSave'));
+Object.assign(globalThis, await import('../app/composables/useNotes'));
 
 // Global test setup for Nuxt environment
 (globalThis as any).defineNuxtConfig = (fnOrConfig: any) => typeof fnOrConfig === 'function' ? fnOrConfig() : fnOrConfig;

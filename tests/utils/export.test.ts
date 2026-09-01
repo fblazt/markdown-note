@@ -49,6 +49,7 @@ console.log(greeting);
     it('strips illegal filename characters (<>:"/\\|?*) and control characters', () => {
       const raw = 'Bad <File> : Name "With" / Slashes \\ And | Pipes ? * Asterisks';
       const clean = sanitizeFilename(raw);
+      // eslint-disable-next-line no-control-regex
       expect(clean).not.toMatch(/[<>:"/\\|?*\x00-\x1F]/);
       expect(clean).toBe('Bad-File-Name-With-Slashes-And-Pipes-Asterisks');
     });

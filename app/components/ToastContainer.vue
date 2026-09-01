@@ -6,7 +6,6 @@ import {
   AlertOctagon,
   X,
 } from 'lucide-vue-next';
-import { useToast } from '../composables/useToast';
 import type { Toast } from '../../shared/types/storage';
 
 const { toasts, removeToast } = useToast();

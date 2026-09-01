@@ -1,4 +1,4 @@
-import { ref, computed, watch, type Ref } from 'vue';
+import type { Ref } from 'vue';
 import type { Note, FolderInfo } from '../../shared/types/note';
 
 // Singleton filter state

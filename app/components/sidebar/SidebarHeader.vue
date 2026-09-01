@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
 import { Plus, FolderPlus, Download, Braces, FileText } from 'lucide-vue-next';
-import { useNotes } from '../../composables/useNotes';
 import { exportNoteJson, exportCombinedMarkdown, downloadBlob } from '../../utils/export';
 
 defineEmits<{

@@ -1,0 +1,75 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "oxc",
+    "typescript",
+    "unicorn",
+    "vue",
+    "vitest"
+  ],
+  "ignorePatterns": [
+    ".nuxt",
+    ".output",
+    "dist",
+    "node_modules",
+    ".data",
+    "**/*.d.ts"
+  ],
+  "rules": {
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/no-conditional-expect": "off",
+    "no-restricted-imports": [
+      "warn",
+      {
+        "paths": [
+          {
+            "name": "vue",
+            "importNames": [
+              "ref",
+              "reactive",
+              "computed",
+              "watch",
+              "watchEffect",
+              "onMounted",
+              "onUnmounted",
+              "onBeforeMount",
+              "onBeforeUnmount",
+              "onUpdated",
+              "nextTick",
+              "toRef",
+              "toRefs",
+              "isRef",
+              "unref",
+              "shallowRef",
+              "readonly",
+              "defineComponent",
+              "defineAsyncComponent"
+            ],
+            "message": "Vue core APIs are auto-imported by Nuxt. Please remove explicit import."
+          }
+        ],
+        "patterns": [
+          {
+            "group": [
+              "**/composables/**",
+              "../composables/**",
+              "~/composables/**",
+              "@/composables/**"
+            ],
+            "message": "Project composables are auto-imported by Nuxt. Please remove explicit import."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "tests/**"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

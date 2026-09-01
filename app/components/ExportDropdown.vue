@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
 import {
   Download,
   ChevronDown,
@@ -10,7 +9,6 @@ import {
   Printer,
 } from 'lucide-vue-next';
 import type { Note } from '../../shared/types/note';
-import { useNotes } from '../composables/useNotes';
 import {
   sanitizeFilename,
   exportNoteMarkdown,

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import {
   Folder,
   FolderOpen,
@@ -9,8 +8,6 @@ import {
   X,
 } from 'lucide-vue-next';
 import type { Note } from '../../../shared/types/note';
-import { useNotes } from '../../composables/useNotes';
-import { flattenFolderTree } from '../../composables/useFolders';
 
 const props = defineProps<{
   activeNote: Note;

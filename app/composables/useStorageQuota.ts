@@ -1,4 +1,3 @@
-import { ref, computed } from 'vue';
 import type { StorageQuotaInfo, StorageStatus } from '../../shared/types/storage';
 
 export const WARNING_PERCENTAGE = 80;

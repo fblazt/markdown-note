@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
 import {
   BookOpen,
   LogIn,
@@ -10,8 +9,6 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-vue-next';
-import { useAuth } from '../composables/useAuth';
-import ThemeToggle from './ThemeToggle.vue';
 
 const emit = defineEmits<{
   (e: 'authenticated'): void;

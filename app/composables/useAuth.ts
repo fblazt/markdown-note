@@ -1,4 +1,3 @@
-import { ref } from 'vue';
 import { apiFetch } from '../utils/api';
 import { db } from '../utils/db';
 import type {

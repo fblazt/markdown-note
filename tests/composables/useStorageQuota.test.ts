@@ -3,10 +3,6 @@ import {
   useStorageQuota,
   formatBytes,
   calculateStorageStatus,
-  WARNING_PERCENTAGE,
-  CRITICAL_PERCENTAGE,
-  WARNING_REMAINING_BYTES,
-  CRITICAL_REMAINING_BYTES,
 } from '../../app/composables/useStorageQuota';
 
 describe('Composable: useStorageQuota & helpers', () => {

@@ -1,4 +1,3 @@
-import { ref } from 'vue';
 import type { Note } from '../../shared/types/note';
 
 export type DraggedItem =

@@ -1,9 +1,5 @@
-import { ref } from 'vue';
 import { db, type Note } from '../utils/db';
 import { apiFetch } from '../utils/api';
-import { useAuth } from './useAuth';
-import { useNotes } from './useNotes';
-import { useToast } from './useToast';
 import type {
   SyncState,
   SyncConflict,

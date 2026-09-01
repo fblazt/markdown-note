@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { Trash2, AlertTriangle, Info, X, FileText } from 'lucide-vue-next';
-import { useConfirm } from '../composables/useConfirm';
 
 const { isOpen, options, handleConfirm, handleCancel } = useConfirm();
 

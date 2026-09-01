@@ -1,5 +1,3 @@
-import { ref } from 'vue';
-
 export type ThemeSetting = 'system' | 'dark' | 'light';
 export type ResolvedTheme = 'dark' | 'light';
 

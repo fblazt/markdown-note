@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { Eye, Copy, Check, Code } from 'lucide-vue-next';
-import { useNotes } from '../composables/useNotes';
-import { useTheme } from '../composables/useTheme';
 import { parseMarkdown, escapeHtml } from '../utils/markdown';
 import { renderMermaidDiagram } from '../utils/mermaid';
-import ExportDropdown from './ExportDropdown.vue';
 
 const { activeNote } = useNotes();
 const { resolvedTheme } = useTheme();

@@ -374,7 +374,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       expect(noteMutations.length).toBe(1);
       expect(noteMutations[0]?.action).toBe('upsert');
       expect(noteMutations[0]?.baseUpdatedAt).toBeNull();
-      expect((noteMutations[0]?.data as Note).title).toBe('New Feature Doc');
+      expect((noteMutations[0]?.data as Note)?.title).toBe('New Feature Doc');
     });
 
     it('createNote provides default title if empty', async () => {
@@ -417,7 +417,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       expect(updateMutation).toBeDefined();
       expect(updateMutation?.action).toBe('upsert');
       expect(updateMutation?.baseUpdatedAt).toBe(originalUpdatedAt);
-      expect((updateMutation?.data as Note).title).toBe('Updated Welcome Guide');
+      expect((updateMutation?.data as Note)?.title).toBe('Updated Welcome Guide');
     });
 
     it('updateNote returns null for non-existent or soft-deleted note', async () => {
@@ -487,7 +487,7 @@ describe('Database Utility (Dexie client-side IndexedDB)', () => {
       );
       expect(restoreMutation).toBeDefined();
       expect(restoreMutation?.baseUpdatedAt).toBe(tombstoneUpdatedAt);
-      expect((restoreMutation?.data as Note).deletedAt).toBeNull();
+      expect((restoreMutation?.data as Note)?.deletedAt).toBeNull();
     });
 
     it('restoreNote returns null for non-existent note', async () => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Monitor, Sun, Moon, Check } from 'lucide-vue-next';
-import { useTheme, type ThemeSetting } from '../composables/useTheme';
+
+type ThemeSetting = 'system' | 'dark' | 'light';
 
 const { themeSetting, setTheme } = useTheme();
 const isOpen = ref(false);

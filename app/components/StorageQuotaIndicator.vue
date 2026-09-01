@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
 import {
   HardDrive,
   ChevronDown,
@@ -10,9 +9,6 @@ import {
   Download,
   RefreshCw,
 } from 'lucide-vue-next';
-import { useStorageQuota } from '../composables/useStorageQuota';
-import { useNotes } from '../composables/useNotes';
-import { useToast } from '../composables/useToast';
 import { exportNoteJson, downloadBlob } from '../utils/export';
 
 const { quotaInfo, isChecking, checkQuota, requestPersistence } = useStorageQuota();

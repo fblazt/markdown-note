@@ -11,6 +11,15 @@ export default defineNuxtConfig({
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || '',
     },
   },
+  nitro: {
+    devProxy: {
+      '/api': {
+        target: process.env.BACKEND_PROXY_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        credentials: true,
+      } as any,
+    },
+  },
   modules: ['@vite-pwa/nuxt'],
   pwa: {
     registerType: 'autoUpdate',

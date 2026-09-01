@@ -1,9 +1,4 @@
-import { ref, computed } from 'vue';
 import type { Note, CreateNoteDTO, UpdateNoteDTO } from '../../shared/types/note';
-import { useStorageQuota } from './useStorageQuota';
-import { useToast } from './useToast';
-import { useAuth } from './useAuth';
-import { useSync } from './useSync';
 import { exportNoteJson, downloadBlob } from '../utils/export';
 import {
   getAllNotes,
@@ -12,10 +7,6 @@ import {
   deleteNote as dbDeleteNote,
   restoreNote as dbRestoreNote,
 } from '../utils/db';
-import { useFolders } from './useFolders';
-import { useAutoSave, isQuotaExceededError, handleQuotaExceeded } from './useAutoSave';
-import { useNoteFilter } from './useNoteFilter';
-import { useWorkspaceLayout } from './useWorkspaceLayout';
 
 const getInitialSelectedNoteId = (): string | null => {
   if (typeof localStorage !== 'undefined') {
@@ -486,7 +477,7 @@ if (typeof window !== 'undefined') {
 
   window.addEventListener('notes-synced', async () => {
     try {
-      const [data, folderData] = await Promise.all([
+      const [data] = await Promise.all([
         getAllNotes(),
         useFolders().fetchFolders(),
       ]);

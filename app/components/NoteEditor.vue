@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { Trash2 } from 'lucide-vue-next';
-import { useNotes } from '../composables/useNotes';
-import { useConfirm } from '../composables/useConfirm';
-import ExportDropdown from './ExportDropdown.vue';
-import EditorSaveStatus from './editor/EditorSaveStatus.vue';
-import EditorFolderSelector from './editor/EditorFolderSelector.vue';
-import EditorTagBar from './editor/EditorTagBar.vue';
-import EditorToolbar from './editor/EditorToolbar.vue';
 
 const {
   activeNote,

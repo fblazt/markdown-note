@@ -1,10 +1,4 @@
 <script setup lang="ts">
-import { useWorkspaceLayout } from '../../composables/useWorkspaceLayout';
-import NoteSidebar from '../NoteSidebar.vue';
-import NoteEditor from '../NoteEditor.vue';
-import NotePreview from '../NotePreview.vue';
-import StorageAlertBanner from '../StorageAlertBanner.vue';
-
 const {
   effectiveViewMode,
   isSidebarOpen,

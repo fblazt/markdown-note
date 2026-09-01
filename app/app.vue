@@ -1,17 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { Loader2 } from 'lucide-vue-next';
-import { useAuth } from './composables/useAuth';
-import { useNotes } from './composables/useNotes';
-import { useTheme } from './composables/useTheme';
-import { useSync } from './composables/useSync';
-import AuthGate from './components/AuthGate.vue';
-import AppHeader from './components/layout/AppHeader.vue';
-import AppWorkspace from './components/layout/AppWorkspace.vue';
-import AppStatusBar from './components/layout/AppStatusBar.vue';
-import ConfirmDialog from './components/ConfirmDialog.vue';
-import ToastContainer from './components/ToastContainer.vue';
-import ProfileModal from './components/ProfileModal.vue';
 
 const isProfileOpen = ref(false);
 

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { Tag, X } from 'lucide-vue-next';
 import type { Note } from '../../../shared/types/note';
-import { useNotes } from '../../composables/useNotes';
 
 const props = defineProps<{
   activeNote: Note;

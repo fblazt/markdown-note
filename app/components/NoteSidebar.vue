@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue';
 import {
   Plus,
   FolderPlus,
@@ -10,14 +9,6 @@ import {
   ChevronRight,
   Layers,
 } from 'lucide-vue-next';
-import { useNotes } from '../composables/useNotes';
-import { useConfirm } from '../composables/useConfirm';
-import { useDragAndDrop } from '../composables/useDragAndDrop';
-import SidebarHeader from './sidebar/SidebarHeader.vue';
-import SidebarSearch from './sidebar/SidebarSearch.vue';
-import FolderTreeNodeItem from './FolderTreeNodeItem.vue';
-import NoteCard from './common/NoteCard.vue';
-import StorageQuotaIndicator from './StorageQuotaIndicator.vue';
 
 const {
   notes,

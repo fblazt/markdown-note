@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotes } from '../../app/composables/useNotes';
 import { useToast } from '../../app/composables/useToast';
 import { useStorageQuota } from '../../app/composables/useStorageQuota';
-import { resetDb, getNoteById, getAllFolders, getAllNotes, db } from '../../app/utils/db';
+import { resetDb, getNoteById, db } from '../../app/utils/db';
 import * as dbUtils from '../../app/utils/db';
 import type { Note } from '../../shared/types/note';
 

@@ -1,4 +1,4 @@
-import { ref, computed, watch, type Ref } from 'vue';
+import type { Ref } from 'vue';
 import type { FolderInfo, FolderTreeNode, Note } from '../../shared/types/note';
 import {
   getAllFolders,
@@ -7,7 +7,6 @@ import {
   deleteFolder as dbDeleteFolder,
   moveFolder as dbMoveFolder,
 } from '../utils/db';
-import { useSync } from './useSync';
 
 export interface FlattenedFolderOption {
   name: string;

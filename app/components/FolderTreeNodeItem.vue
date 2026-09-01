@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue';
 import {
   Folder,
   FolderOpen,
@@ -13,8 +12,6 @@ import {
   X,
 } from 'lucide-vue-next';
 import type { FolderTreeNode, Note } from '../../shared/types/note';
-import { useNotes } from '../composables/useNotes';
-import NoteCard from './common/NoteCard.vue';
 
 const props = defineProps<{
   node: FolderTreeNode;

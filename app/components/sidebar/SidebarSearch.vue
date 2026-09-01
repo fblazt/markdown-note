@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Search, X } from 'lucide-vue-next';
-import { useNotes } from '../../composables/useNotes';
 
 const {
   searchQuery,

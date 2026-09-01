@@ -8,8 +8,6 @@ import {
   ChevronLeft,
   User,
 } from 'lucide-vue-next';
-import { useWorkspaceLayout } from '../../composables/useWorkspaceLayout';
-import ThemeToggle from '../ThemeToggle.vue';
 
 defineEmits<{
   (e: 'open-profile'): void;

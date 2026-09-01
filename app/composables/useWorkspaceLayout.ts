@@ -1,5 +1,3 @@
-import { ref, computed } from 'vue';
-
 export type ViewMode = 'split' | 'editor' | 'preview';
 
 // Singleton refs to preserve layout state across component tree

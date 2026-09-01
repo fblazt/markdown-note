@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import {
   User,
   Mail,
@@ -11,7 +10,6 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-vue-next';
-import { useAuth } from '../composables/useAuth';
 
 const emit = defineEmits<{
   (e: 'close'): void;

@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
 import { AlertTriangle, AlertOctagon, Download, X } from 'lucide-vue-next';
-import { useStorageQuota } from '../composables/useStorageQuota';
-import { useNotes } from '../composables/useNotes';
-import { useToast } from '../composables/useToast';
 import { exportNoteJson, downloadBlob } from '../utils/export';
 
 const { quotaInfo, isStorageNearLimit } = useStorageQuota();
